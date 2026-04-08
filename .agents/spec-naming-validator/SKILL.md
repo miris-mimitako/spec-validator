@@ -24,6 +24,12 @@ Validate a few names quickly:
 python .agents/spec-naming-validator/scripts/validate_names.py OrderRepository PlaceOrderUseCase CustomerDTO --format text
 ```
 
+Scan a NestJS directory:
+
+```powershell
+python .agents/spec-naming-validator/scripts/validate_names.py --path examples/nestjs-pass/src/orders --format text
+```
+
 Get machine-readable output:
 
 ```powershell

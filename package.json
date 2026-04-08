@@ -1,0 +1,33 @@
+{
+  "name": "spec-validator",
+  "version": "1.0.0",
+  "description": "Specification consistency audit and naming validation tooling.",
+  "main": "index.js",
+  "scripts": {
+    "validate:naming:pass": "python .agents/spec-naming-validator/scripts/validate_names.py --path examples/nestjs-pass/src/orders --format text",
+    "validate:naming:fail": "python .agents/spec-naming-validator/scripts/validate_names.py --path examples/nestjs-fail/src/orders --format text"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/miris-mimitako/spec-validator.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/miris-mimitako/spec-validator/issues"
+  },
+  "homepage": "https://github.com/miris-mimitako/spec-validator#readme",
+  "dependencies": {
+    "@nestjs/common": "^11.1.18",
+    "@nestjs/core": "^11.1.18",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.2"
+  }
+}

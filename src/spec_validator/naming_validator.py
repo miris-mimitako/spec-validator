@@ -28,11 +28,41 @@ def _tokenize_name(name: str) -> list[str]:
     if not name:
         return []
 
-    if "-" in name or "_" in name:
-        parts = re.split(r"[-_]+", name)
+    if "-" in name or "_" in name or "." in name:
+        parts = re.split(r"[-_.]+", name)
         return [part for part in parts if part]
 
     return re.findall(r"[A-Z]+(?=[A-Z][a-z]|[0-9]|$)|[A-Z]?[a-z]+|[0-9]+", name)
+
+
+def _normalize_identifier(name: str) -> str:
+    tokens = _tokenize_name(name)
+    normalized: list[str] = []
+    for token in tokens:
+        if not token:
+            continue
+        normalized.append(token if token.isupper() else token[0].upper() + token[1:])
+    return "".join(normalized)
+
+
+def _normalize_file_stem(path: Path) -> str:
+    return _normalize_identifier(path.stem)
+
+
+def _extract_typescript_identifiers(path: Path) -> list[tuple[str, str]]:
+    text = path.read_text(encoding="utf-8")
+    matches: list[tuple[str, str]] = []
+    patterns = [
+        ("class", re.compile(r"\bexport\s+class\s+([A-Za-z_][A-Za-z0-9_]*)")),
+        ("interface", re.compile(r"\bexport\s+interface\s+([A-Za-z_][A-Za-z0-9_]*)")),
+        ("type", re.compile(r"\bexport\s+type\s+([A-Za-z_][A-Za-z0-9_]*)")),
+        ("enum", re.compile(r"\bexport\s+enum\s+([A-Za-z_][A-Za-z0-9_]*)")),
+        ("function", re.compile(r"\bexport\s+function\s+([A-Za-z_][A-Za-z0-9_]*)")),
+    ]
+    for kind, pattern in patterns:
+        for match in pattern.finditer(text):
+            matches.append((kind, match.group(1)))
+    return matches
 
 
 @dataclass(frozen=True)
@@ -50,6 +80,7 @@ class NamingValidator:
         self.framework_terms = self._collect_terms(self.standard_language, "framework")
         self.ddd_terms = self._collect_terms(self.standard_language, "ddd")
         self.test_terms = self._collect_terms(self.standard_language, "test")
+        self.role_term_aliases = self._collect_role_term_aliases(self.standard_language)
         self.forbidden_terms = self._collect_forbidden_terms(self.standard_language)
         self.domain_entries = self._collect_domain_entries(self.domain_terms)
         self.allowed_role_suffixes = (
@@ -76,6 +107,18 @@ class NamingValidator:
                 values.add(term)
             for alias in item.get("aliases", []):
                 values.add(alias)
+        return values
+
+    def _collect_role_term_aliases(self, data: dict[str, Any]) -> dict[str, str]:
+        values: dict[str, str] = {}
+        for key in ("framework", "ddd", "test"):
+            for item in data.get("terms", {}).get(key, []):
+                term = item.get("term")
+                if not term:
+                    continue
+                values[term] = term
+                for alias in item.get("aliases", []):
+                    values[alias] = term
         return values
 
     def _collect_domain_entries(self, data: dict[str, Any]) -> dict[str, TermEntry]:
@@ -123,6 +166,7 @@ class NamingValidator:
             )
 
         matched_roles, remaining = self._extract_role_suffixes(tokens)
+        matched_roles = [self.role_term_aliases.get(role, role) for role in matched_roles]
 
         result["matched_role_suffixes"] = matched_roles
 
@@ -195,6 +239,40 @@ class NamingValidator:
         )
         return result
 
+    def validate_identifier(self, name: str) -> dict[str, Any]:
+        normalized = _normalize_identifier(name)
+        result = self.validate_name(normalized)
+        result["original_name"] = name
+        result["normalized_name"] = normalized
+        return result
+
+    def validate_typescript_path(self, path: Path) -> list[dict[str, Any]]:
+        if path.is_file():
+            ts_files = [path]
+        else:
+            ts_files = sorted(
+                candidate
+                for candidate in path.rglob("*.ts")
+                if "node_modules" not in candidate.parts
+            )
+
+        results: list[dict[str, Any]] = []
+        for ts_file in ts_files:
+            file_result = self.validate_identifier(_normalize_file_stem(ts_file))
+            file_result["source_type"] = "file"
+            file_result["source_path"] = str(ts_file)
+            file_result["source_name"] = ts_file.name
+            results.append(file_result)
+
+            for declaration_kind, declaration_name in _extract_typescript_identifiers(ts_file):
+                declaration_result = self.validate_identifier(declaration_name)
+                declaration_result["source_type"] = declaration_kind
+                declaration_result["source_path"] = str(ts_file)
+                declaration_result["source_name"] = declaration_name
+                results.append(declaration_result)
+
+        return results
+
     def _extract_role_suffixes(self, tokens: list[str]) -> tuple[list[str], list[str]]:
         matched_roles: list[str] = []
         remaining = tokens[:]
@@ -228,7 +306,11 @@ class NamingValidator:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Validate names against DDD naming rules.")
-    parser.add_argument("names", nargs="+", help="Names to validate.")
+    parser.add_argument("names", nargs="*", help="Names to validate.")
+    parser.add_argument(
+        "--path",
+        help="TypeScript file or directory to scan for file names and exported declarations.",
+    )
     parser.add_argument(
         "--standard-language",
         default=str(STANDARD_LANGUAGE_FILE),
@@ -252,7 +334,12 @@ def _format_text(results: list[dict[str, Any]]) -> str:
     lines: list[str] = []
     for result in results:
         status = "OK" if result["valid"] else "NG"
-        lines.append(f"{status} {result['name']}")
+        label = result.get("source_name", result["name"])
+        lines.append(f"{status} {label}")
+        if result.get("source_type") and result.get("source_path"):
+            lines.append(f"  source: {result['source_type']} @ {result['source_path']}")
+        if result.get("normalized_name") and result["normalized_name"] != label:
+            lines.append(f"  normalized: {result['normalized_name']}")
         if result["matched_domain_terms"]:
             lines.append(f"  domain: {', '.join(result['matched_domain_terms'])}")
         if result["matched_role_suffixes"]:
@@ -270,7 +357,13 @@ def main() -> int:
         standard_language_path=Path(args.standard_language),
         domain_terms_path=Path(args.domain_terms),
     )
-    results = [validator.validate_name(name) for name in args.names]
+    results: list[dict[str, Any]] = []
+    if args.names:
+        results.extend(validator.validate_identifier(name) for name in args.names)
+    if args.path:
+        results.extend(validator.validate_typescript_path(Path(args.path)))
+    if not results:
+        parser.error("Provide at least one name or --path.")
 
     if args.format == "text":
         print(_format_text(results))
