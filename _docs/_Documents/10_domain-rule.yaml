@@ -67,6 +67,7 @@ domains:
             inclusive_max: true
         test_rule_refs:
           - both-boundary
+          - cross-rule-combination
         implementation:
           required: true
           implementation_id: domain-rule-001-impl
@@ -76,8 +77,15 @@ domains:
         traceability:
           required_test_patterns:
             - both-boundary
+            - cross-rule-combination
+          required_test_layers:
+            - UT
+            - IT
+            - E2E
+          related_rule_ids:
+            - domain-rule-002
           minimum_implementation_refs: 1
-          minimum_test_refs: 4
+          minimum_test_refs: 7
         notes:
           - boundary tests are expected at min-1, min, max, max+1 when technically possible
 
@@ -100,6 +108,7 @@ domains:
             trim_required: true
         test_rule_refs:
           - required-basic
+          - cross-rule-combination
         implementation:
           required: true
           implementation_id: domain-rule-002-impl
@@ -108,8 +117,14 @@ domains:
         traceability:
           required_test_patterns:
             - required-basic
+            - cross-rule-combination
+          required_test_layers:
+            - UT
+            - IT
+          related_rule_ids:
+            - domain-rule-001
           minimum_implementation_refs: 1
-          minimum_test_refs: 3
+          minimum_test_refs: 6
 
 validation_examples:
   valid_implementation_annotations:

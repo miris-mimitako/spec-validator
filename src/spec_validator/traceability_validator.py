@@ -53,6 +53,7 @@ class TestPattern:
     pattern_id: str
     generated_cases: list[GeneratedCase]
     minimum_cases: int
+    multi_rule_support: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -62,6 +63,8 @@ class DomainRule:
     rule_type: str
     implementation_id: str
     required_test_patterns: list[str]
+    required_test_layers: list[str]
+    related_rule_ids: list[str]
     minimum_implementation_refs: int
     minimum_test_refs: int
 
@@ -73,6 +76,8 @@ class Annotation:
     source_path: str
     line_number: int
     reason: str | None = None
+    test_layer: str | None = None
+    related_rule_ids: list[str] | None = None
 
 
 def _ratio(numerator: int, denominator: int) -> float:
@@ -95,6 +100,8 @@ class TraceabilityValidator:
         self.test_rules_doc = _load_yaml(test_rules_path)
         self.domain_rules = self._collect_domain_rules()
         self.test_patterns = self._collect_test_patterns()
+        self.comment_extraction = self.test_rules_doc["comment_extraction"]
+        self.test_layers = self._collect_test_layers()
         self.impl_validation_pattern = re.compile(
             self.test_rules_doc["traceability_rules"]["implementation_annotation"][
                 "required_pattern"
@@ -106,11 +113,41 @@ class TraceabilityValidator:
         self.omitted_validation_pattern = re.compile(
             self.test_rules_doc["omitted_rule"]["required_pattern"]
         )
-        self.impl_extract_pattern = re.compile(r"domain-rule-[0-9]{3}-impl")
-        self.test_id_extract_pattern = re.compile(r"domain-rule-[0-9]{3}-[A-Z-]+-[0-9]{3}")
-        self.omitted_extract_pattern = re.compile(
-            r"domain-rule-[0-9]{3}-[A-Z-]+-OMITTED\s+Reason:\s+.+"
+        self.impl_extract_pattern = re.compile(
+            self.comment_extraction["loose_detection"]["implementation_token_pattern"]
         )
+        self.test_id_extract_pattern = re.compile(
+            self.comment_extraction["loose_detection"]["test_token_pattern"]
+        )
+        self.omitted_extract_pattern = re.compile(
+            self.comment_extraction["loose_detection"]["omitted_token_pattern"]
+        )
+        self.implementation_comment_pattern = re.compile(
+            self.comment_extraction["implementation_comment_pattern"]
+        )
+        self.test_comment_pattern = re.compile(
+            self.comment_extraction["test_comment_pattern"]
+        )
+        self.omitted_comment_pattern = re.compile(
+            self.comment_extraction["omitted_comment_pattern"]
+        )
+        self.related_rules_comment_pattern = re.compile(
+            self.comment_extraction["related_rules_comment_pattern"]
+        )
+        self.related_rule_extract_pattern = re.compile(
+            self.comment_extraction["loose_detection"]["related_rule_token_pattern"]
+        )
+
+    def _collect_test_layers(self) -> list[dict[str, Any]]:
+        layers: list[dict[str, Any]] = []
+        for item in self.test_rules_doc.get("test_layers", {}).get("definitions", []):
+            layers.append(
+                {
+                    "layer_id": item["layer_id"],
+                    "patterns": [re.compile(pattern) for pattern in item.get("path_patterns", [])],
+                }
+            )
+        return layers
 
     def _collect_domain_rules(self) -> dict[str, DomainRule]:
         rules: dict[str, DomainRule] = {}
@@ -122,6 +159,8 @@ class TraceabilityValidator:
                     rule_type=item["rule_type"],
                     implementation_id=item["implementation"]["implementation_id"],
                     required_test_patterns=item["traceability"]["required_test_patterns"],
+                    required_test_layers=item["traceability"].get("required_test_layers", []),
+                    related_rule_ids=item["traceability"].get("related_rule_ids", []),
                     minimum_implementation_refs=item["traceability"][
                         "minimum_implementation_refs"
                     ],
@@ -144,6 +183,7 @@ class TraceabilityValidator:
                     for case in item.get("generated_cases", [])
                 ],
                 minimum_cases=item["minimum_cases"],
+                multi_rule_support=item.get("multi_rule_support", {"enabled": False}),
             )
         return patterns
 
@@ -175,49 +215,127 @@ class TraceabilityValidator:
         scan_kind: str,
     ) -> list[Annotation]:
         annotations: list[Annotation] = []
+        source_path = str(path)
         if scan_kind == "impl":
-            for match in self.impl_extract_pattern.finditer(line):
-                token = match.group(0)
-                if not self.impl_validation_pattern.fullmatch(token):
-                    continue
+            strict_match = self.implementation_comment_pattern.match(line)
+            if strict_match:
                 annotations.append(
                     Annotation(
                         annotation_type="implementation",
-                        value=token,
-                        source_path=str(path),
+                        value=strict_match.group(1),
+                        source_path=source_path,
                         line_number=line_number,
                     )
                 )
+                return annotations
+
+            if self.comment_extraction["invalid_format_is_error"]:
+                for match in self.impl_extract_pattern.finditer(line):
+                    token = match.group(0)
+                    if not self.impl_validation_pattern.fullmatch(token):
+                        continue
+                    annotations.append(
+                        Annotation(
+                            annotation_type="invalid_implementation_format",
+                            value=token,
+                            source_path=source_path,
+                            line_number=line_number,
+                        )
+                    )
             return annotations
 
-        omitted_match = self.omitted_extract_pattern.search(line)
+        test_layer = self._detect_test_layer(path)
+        related_rules_match = self.related_rules_comment_pattern.match(line)
+        if related_rules_match:
+            related_rule_ids = [item.strip() for item in related_rules_match.group(1).split(",")]
+            annotations.append(
+                Annotation(
+                    annotation_type="related_rules",
+                    value=related_rules_match.group(1),
+                    source_path=source_path,
+                    line_number=line_number,
+                    test_layer=test_layer,
+                    related_rule_ids=related_rule_ids,
+                )
+            )
+            return annotations
+        omitted_match = self.omitted_comment_pattern.match(line)
         if omitted_match:
-            value_with_reason = omitted_match.group(0)
+            token = omitted_match.group(1)
+            value_with_reason = omitted_match.group(0).split("TRACE:", 1)[1].strip()
             if self.omitted_validation_pattern.fullmatch(value_with_reason):
-                token, reason = value_with_reason.split(" Reason:", 1)
                 annotations.append(
                     Annotation(
                         annotation_type="omitted",
                         value=token,
-                        source_path=str(path),
+                        source_path=source_path,
                         line_number=line_number,
-                        reason=reason.strip(),
+                        reason=omitted_match.group(2).strip(),
+                        test_layer=test_layer,
                     )
                 )
+            return annotations
 
-        for match in self.test_id_extract_pattern.finditer(line):
-            token = match.group(0)
-            if not self.test_id_validation_pattern.fullmatch(token):
-                continue
+        test_match = self.test_comment_pattern.match(line)
+        if test_match:
             annotations.append(
                 Annotation(
                     annotation_type="test",
-                    value=token,
-                    source_path=str(path),
+                    value=test_match.group(1),
+                    source_path=source_path,
                     line_number=line_number,
+                    test_layer=test_layer,
                 )
             )
+            return annotations
+
+        if self.comment_extraction["invalid_format_is_error"]:
+            for match in self.related_rule_extract_pattern.finditer(line):
+                token = match.group(0)
+                if token.count("domain-rule-") >= 2:
+                    annotations.append(
+                        Annotation(
+                            annotation_type="invalid_related_rules_format",
+                            value=token,
+                            source_path=source_path,
+                            line_number=line_number,
+                            test_layer=test_layer,
+                        )
+                    )
+            for match in self.omitted_extract_pattern.finditer(line):
+                token = match.group(0)
+                if token.endswith("-OMITTED"):
+                    annotations.append(
+                        Annotation(
+                            annotation_type="invalid_test_format",
+                            value=token,
+                            source_path=source_path,
+                            line_number=line_number,
+                            test_layer=test_layer,
+                        )
+                    )
+            for match in self.test_id_extract_pattern.finditer(line):
+                token = match.group(0)
+                if not self.test_id_validation_pattern.fullmatch(token):
+                    continue
+                annotations.append(
+                    Annotation(
+                        annotation_type="invalid_test_format",
+                        value=token,
+                        source_path=source_path,
+                        line_number=line_number,
+                        test_layer=test_layer,
+                    )
+                )
         return annotations
+
+    def _detect_test_layer(self, path: Path) -> str:
+        normalized = str(path).replace("/", "\\")
+        for layer in self.test_layers:
+            for pattern in layer["patterns"]:
+                if pattern.search(normalized):
+                    return layer["layer_id"]
+        return self.test_rules_doc["test_layers"]["default_layer"]
 
     def validate(
         self,
@@ -230,12 +348,17 @@ class TraceabilityValidator:
 
         implementation_by_id: dict[str, list[Annotation]] = {}
         for annotation in implementation_annotations:
+            if annotation.annotation_type != "implementation":
+                continue
             implementation_by_id.setdefault(annotation.value, []).append(annotation)
 
         observed_test_ids: dict[str, list[Annotation]] = {}
         observed_omitted_ids: dict[str, list[Annotation]] = {}
         unmapped_test_annotations: list[Annotation] = []
         duplicate_test_ids: list[dict[str, Any]] = []
+        invalid_comment_annotations: list[Annotation] = []
+        directional_combo_links: dict[tuple[str, str], int] = {}
+        related_rules_by_location: dict[tuple[str, int], Annotation] = {}
 
         expected_test_ids = self._expected_test_ids_by_rule()
         expected_case_keys = {
@@ -245,21 +368,47 @@ class TraceabilityValidator:
         }
 
         for annotation in test_annotations:
+            if annotation.annotation_type == "related_rules":
+                related_rules_by_location[(annotation.source_path, annotation.line_number)] = annotation
+
+        for annotation in test_annotations:
+            if annotation.annotation_type == "related_rules":
+                continue
+            if annotation.annotation_type == "invalid_test_format":
+                invalid_comment_annotations.append(annotation)
+                continue
+            if annotation.annotation_type == "invalid_related_rules_format":
+                invalid_comment_annotations.append(annotation)
+                continue
             if annotation.annotation_type == "omitted":
+                annotation = self._attach_related_rules(annotation, related_rules_by_location)
                 parsed = self._parse_omitted_id(annotation.value)
                 if parsed and (parsed["rule_id"], parsed["suffix"]) in expected_case_keys:
                     key = annotation.value
                     observed_omitted_ids.setdefault(key, []).append(annotation)
+                    self._register_combo_link(
+                        directional_combo_links,
+                        parsed["rule_id"],
+                        parsed["suffix"],
+                        annotation.related_rule_ids or [],
+                    )
                 else:
                     unmapped_test_annotations.append(annotation)
                 continue
 
+            annotation = self._attach_related_rules(annotation, related_rules_by_location)
             parsed = self._parse_test_id(annotation.value)
             if not parsed or (parsed["rule_id"], parsed["suffix"]) not in expected_case_keys:
                 unmapped_test_annotations.append(annotation)
                 continue
 
             observed_test_ids.setdefault(annotation.value, []).append(annotation)
+            self._register_combo_link(
+                directional_combo_links,
+                parsed["rule_id"],
+                parsed["suffix"],
+                annotation.related_rule_ids or [],
+            )
 
         for test_id, annotations in observed_test_ids.items():
             if len(annotations) > 1:
@@ -278,6 +427,10 @@ class TraceabilityValidator:
 
         rule_results: list[dict[str, Any]] = []
         issues: list[dict[str, Any]] = []
+
+        config_relation_issues = self._validate_related_rule_config()
+        for issue in config_relation_issues:
+            issues.append(issue)
 
         for rule in self.domain_rules.values():
             implementation_refs = implementation_by_id.get(rule.implementation_id, [])
@@ -320,6 +473,9 @@ class TraceabilityValidator:
                     missing_cases.append({"suffix": suffix})
 
             rule_issues: list[dict[str, Any]] = []
+            for issue in config_relation_issues:
+                if issue["rule_id"] == rule.rule_id:
+                    rule_issues.append(issue)
             if len(implementation_refs) < rule.minimum_implementation_refs:
                 issue = {
                     "code": "MISSING_IMPLEMENTATION_REF",
@@ -353,6 +509,36 @@ class TraceabilityValidator:
                 rule_issues.append(issue)
                 issues.append(issue)
 
+            rule_layer_summary = self._build_rule_layer_summary(case_matrix)
+            missing_layers = [
+                layer for layer in rule.required_test_layers if layer not in rule_layer_summary
+            ]
+            for layer in missing_layers:
+                issue = {
+                    "code": "MISSING_REQUIRED_TEST_LAYER",
+                    "rule_id": rule.rule_id,
+                    "message": "Required test layer is missing.",
+                    "layer": layer,
+                }
+                rule_issues.append(issue)
+                issues.append(issue)
+
+            combination_issues = self._validate_combination_metadata(
+                rule=rule,
+                case_matrix=case_matrix,
+            )
+            for issue in combination_issues:
+                rule_issues.append(issue)
+                issues.append(issue)
+
+            reverse_link_issues = self._validate_bidirectional_combo_links(
+                rule=rule,
+                directional_combo_links=directional_combo_links,
+            )
+            for issue in reverse_link_issues:
+                rule_issues.append(issue)
+                issues.append(issue)
+
             implementation_coverage = _ratio(
                 min(len(implementation_refs), rule.minimum_implementation_refs),
                 rule.minimum_implementation_refs,
@@ -364,6 +550,10 @@ class TraceabilityValidator:
             observed_case_count = sum(
                 1 for case in case_matrix if case["status"] in {"PASS", "OMITTED"}
             )
+            observed_layers = len(
+                [layer for layer in rule.required_test_layers if layer in rule_layer_summary]
+            )
+            layer_coverage = _ratio(observed_layers, len(rule.required_test_layers))
             traceability_coverage = _ratio(
                 (
                     min(len(implementation_refs), rule.minimum_implementation_refs)
@@ -385,6 +575,7 @@ class TraceabilityValidator:
                 expected_suffixes=expected_suffixes,
                 missing_cases=missing_cases,
                 case_matrix=case_matrix,
+                missing_layers=missing_layers,
                 rule_issues=rule_issues,
             )
 
@@ -403,16 +594,29 @@ class TraceabilityValidator:
                     "observed_cases": observed_cases,
                     "case_matrix": case_matrix,
                     "missing_cases": missing_cases,
+                    "required_test_layers": rule.required_test_layers,
+                    "missing_test_layers": missing_layers,
                     "coverage": {
                         "implementation_ref_coverage": implementation_coverage,
                         "test_case_coverage": test_case_coverage,
+                        "test_layer_coverage": layer_coverage,
                         "traceability_coverage": traceability_coverage,
                     },
+                    "layer_summary": rule_layer_summary,
                     "issues": rule_issues,
                 }
             )
 
         for annotation in implementation_annotations:
+            if annotation.annotation_type == "invalid_implementation_format":
+                issues.append(
+                    {
+                        "code": "INVALID_IMPLEMENTATION_COMMENT_FORMAT",
+                        "message": "Implementation annotation must use the configured TRACE comment format.",
+                        "annotation": self._annotation_to_dict(annotation),
+                    }
+                )
+                continue
             if annotation.value not in {rule.implementation_id for rule in self.domain_rules.values()}:
                 issues.append(
                     {
@@ -440,11 +644,34 @@ class TraceabilityValidator:
                 }
             )
 
+        for annotation in invalid_comment_annotations:
+            issues.append(
+                {
+                    "code": (
+                        "INVALID_RELATED_RULES_COMMENT_FORMAT"
+                        if annotation.annotation_type == "invalid_related_rules_format"
+                        else "INVALID_TEST_COMMENT_FORMAT"
+                    ),
+                    "message": (
+                        "TRACE-RULES annotation must use the configured comment format."
+                        if annotation.annotation_type == "invalid_related_rules_format"
+                        else "Test annotation must use the configured TRACE comment format."
+                    ),
+                    "annotation": self._annotation_to_dict(annotation),
+                }
+            )
+
         passed_rules = [item for item in rule_results if item["valid"]]
         failed_rules = [item for item in rule_results if not item["valid"]]
         issue_counts: dict[str, int] = {}
         for issue in issues:
             issue_counts[issue["code"]] = issue_counts.get(issue["code"], 0) + 1
+
+        layer_summary = self._build_global_layer_summary(
+            list(observed_test_ids.values()),
+            list(observed_omitted_ids.values()),
+            rule_results,
+        )
 
         return {
             "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -458,9 +685,83 @@ class TraceabilityValidator:
                 "status": "success" if not issues else "failure",
             },
             "issue_counts": dict(sorted(issue_counts.items())),
+            "layer_summary": layer_summary,
             "rules": rule_results,
             "issues": issues,
         }
+
+    def _register_combo_link(
+        self,
+        directional_combo_links: dict[tuple[str, str], int],
+        primary_rule_id: str,
+        suffix: str,
+        related_rule_ids: list[str],
+    ) -> None:
+        if not suffix.startswith("COMBO-"):
+            return
+        for related_rule_id in related_rule_ids:
+            if related_rule_id == primary_rule_id:
+                continue
+            key = (primary_rule_id, related_rule_id)
+            directional_combo_links[key] = directional_combo_links.get(key, 0) + 1
+
+    def _validate_related_rule_config(self) -> list[dict[str, Any]]:
+        issues: list[dict[str, Any]] = []
+        for rule in self.domain_rules.values():
+            for related_rule_id in rule.related_rule_ids:
+                related_rule = self.domain_rules.get(related_rule_id)
+                if not related_rule:
+                    issues.append(
+                        {
+                            "code": "UNKNOWN_RELATED_RULE_ID",
+                            "rule_id": rule.rule_id,
+                            "message": "Related rule id is not defined in domain rules.",
+                            "related_rule_id": related_rule_id,
+                        }
+                    )
+                    continue
+                if rule.rule_id not in related_rule.related_rule_ids:
+                    issues.append(
+                        {
+                            "code": "MISSING_REVERSE_RULE_RELATION_CONFIG",
+                            "rule_id": rule.rule_id,
+                            "message": "Related rule config is not bidirectional.",
+                            "related_rule_id": related_rule_id,
+                        }
+                    )
+        return issues
+
+    def _validate_bidirectional_combo_links(
+        self,
+        *,
+        rule: DomainRule,
+        directional_combo_links: dict[tuple[str, str], int],
+    ) -> list[dict[str, Any]]:
+        issues: list[dict[str, Any]] = []
+        combo_required = "cross-rule-combination" in rule.required_test_patterns
+        if not combo_required:
+            return issues
+
+        for related_rule_id in rule.related_rule_ids:
+            if directional_combo_links.get((rule.rule_id, related_rule_id), 0) == 0:
+                issues.append(
+                    {
+                        "code": "MISSING_COMBINATION_DIRECTION",
+                        "rule_id": rule.rule_id,
+                        "message": "No combination annotation was found from this rule to the related rule.",
+                        "related_rule_id": related_rule_id,
+                    }
+                )
+            if directional_combo_links.get((related_rule_id, rule.rule_id), 0) == 0:
+                issues.append(
+                    {
+                        "code": "MISSING_REVERSE_COMBINATION_DIRECTION",
+                        "rule_id": rule.rule_id,
+                        "message": "No reverse combination annotation was found from the related rule back to this rule.",
+                        "related_rule_id": related_rule_id,
+                    }
+                )
+        return issues
 
     def _case_status(
         self,
@@ -499,6 +800,7 @@ class TraceabilityValidator:
         expected_suffixes: list[str],
         missing_cases: list[dict[str, Any]],
         case_matrix: list[dict[str, Any]],
+        missing_layers: list[str],
         rule_issues: list[dict[str, Any]],
     ) -> str:
         observed_count = sum(
@@ -516,6 +818,8 @@ class TraceabilityValidator:
         if missing_cases:
             missing_suffixes = ", ".join(item["suffix"] for item in missing_cases)
             parts.append(f"missing test cases: {missing_suffixes}")
+        if missing_layers:
+            parts.append(f"missing test layers: {', '.join(missing_layers)}")
         if not parts and rule_issues:
             parts.append("traceability issues detected")
         joined = "; ".join(parts)
@@ -586,7 +890,143 @@ class TraceabilityValidator:
             "source_path": annotation.source_path,
             "line_number": annotation.line_number,
             "reason": annotation.reason,
+            "test_layer": annotation.test_layer,
+            "related_rule_ids": annotation.related_rule_ids,
         }
+
+    def _attach_related_rules(
+        self,
+        annotation: Annotation,
+        related_rules_by_location: dict[tuple[str, int], Annotation],
+    ) -> Annotation:
+        related = related_rules_by_location.get((annotation.source_path, annotation.line_number + 1))
+        if not related:
+            related = related_rules_by_location.get((annotation.source_path, annotation.line_number - 1))
+        if not related:
+            return annotation
+        return Annotation(
+            annotation_type=annotation.annotation_type,
+            value=annotation.value,
+            source_path=annotation.source_path,
+            line_number=annotation.line_number,
+            reason=annotation.reason,
+            test_layer=annotation.test_layer,
+            related_rule_ids=related.related_rule_ids,
+        )
+
+    def _validate_combination_metadata(
+        self,
+        *,
+        rule: DomainRule,
+        case_matrix: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        issues: list[dict[str, Any]] = []
+        for pattern_id in rule.required_test_patterns:
+            pattern = self.test_patterns[pattern_id]
+            if not pattern.multi_rule_support.get("enabled"):
+                continue
+            combination_suffixes = {case.suffix for case in pattern.generated_cases}
+            for case in case_matrix:
+                if case["suffix"] not in combination_suffixes:
+                    continue
+                annotations = case["tests"] + case["omitted"]
+                if not annotations:
+                    continue
+                for annotation in annotations:
+                    related_rule_ids = annotation.get("related_rule_ids") or []
+                    if len(related_rule_ids) < pattern.multi_rule_support["minimum_related_rules"]:
+                        issues.append(
+                            {
+                                "code": "MISSING_TRACE_RULES_METADATA",
+                                "rule_id": rule.rule_id,
+                                "message": "Combination test requires TRACE-RULES metadata.",
+                                "suffix": case["suffix"],
+                                "annotation": annotation,
+                            }
+                        )
+                        continue
+                    if (
+                        pattern.multi_rule_support.get("relation_must_include_primary_rule")
+                        and rule.rule_id not in related_rule_ids
+                    ):
+                        issues.append(
+                            {
+                                "code": "INVALID_TRACE_RULES_METADATA",
+                                "rule_id": rule.rule_id,
+                                "message": "TRACE-RULES metadata must include the primary rule id.",
+                                "suffix": case["suffix"],
+                                "annotation": annotation,
+                            }
+                        )
+                    for related_rule_id in rule.related_rule_ids:
+                        if related_rule_id not in related_rule_ids:
+                            issues.append(
+                                {
+                                    "code": "MISSING_RELATED_RULE_IN_TRACE_RULES",
+                                    "rule_id": rule.rule_id,
+                                    "message": "TRACE-RULES metadata is missing a required related rule.",
+                                    "suffix": case["suffix"],
+                                    "related_rule_id": related_rule_id,
+                                    "annotation": annotation,
+                                }
+                            )
+        return issues
+
+    def _build_rule_layer_summary(self, case_matrix: list[dict[str, Any]]) -> dict[str, dict[str, int]]:
+        summary: dict[str, dict[str, int]] = {}
+        for case in case_matrix:
+            for test in case["tests"]:
+                layer = test.get("test_layer") or "UNKNOWN"
+                summary.setdefault(layer, {"tests": 0, "omitted": 0})
+                summary[layer]["tests"] += 1
+            for omitted in case["omitted"]:
+                layer = omitted.get("test_layer") or "UNKNOWN"
+                summary.setdefault(layer, {"tests": 0, "omitted": 0})
+                summary[layer]["omitted"] += 1
+        return dict(sorted(summary.items()))
+
+    def _build_global_layer_summary(
+        self,
+        observed_test_annotation_lists: list[list[Annotation]],
+        observed_omitted_annotation_lists: list[list[Annotation]],
+        rule_results: list[dict[str, Any]],
+    ) -> dict[str, dict[str, Any]]:
+        summary: dict[str, dict[str, Any]] = {}
+        for layer in [item["layer_id"] for item in self.test_layers]:
+            summary[layer] = {
+                "tests": 0,
+                "omitted": 0,
+                "rules_touched": 0,
+            }
+        default_layer = self.test_rules_doc["test_layers"]["default_layer"]
+        summary.setdefault(default_layer, {"tests": 0, "omitted": 0, "rules_touched": 0})
+
+        rules_touched_by_layer: dict[str, set[str]] = {key: set() for key in summary}
+        for annotations in observed_test_annotation_lists:
+            for annotation in annotations:
+                layer = annotation.test_layer or default_layer
+                summary.setdefault(layer, {"tests": 0, "omitted": 0, "rules_touched": 0})
+                summary[layer]["tests"] += 1
+                parsed = self._parse_test_id(annotation.value)
+                if parsed:
+                    rules_touched_by_layer.setdefault(layer, set()).add(parsed["rule_id"])
+        for annotations in observed_omitted_annotation_lists:
+            for annotation in annotations:
+                layer = annotation.test_layer or default_layer
+                summary.setdefault(layer, {"tests": 0, "omitted": 0, "rules_touched": 0})
+                summary[layer]["omitted"] += 1
+                parsed = self._parse_omitted_id(annotation.value)
+                if parsed:
+                    rules_touched_by_layer.setdefault(layer, set()).add(parsed["rule_id"])
+        for layer, touched in rules_touched_by_layer.items():
+            summary.setdefault(layer, {"tests": 0, "omitted": 0, "rules_touched": 0})
+            summary[layer]["rules_touched"] = len(touched)
+
+        total_rules = len(rule_results)
+        for layer, item in summary.items():
+            item["rule_coverage"] = _ratio(item["rules_touched"], total_rules)
+
+        return dict(sorted(summary.items()))
 
 
 def _format_text_report(report: dict[str, Any]) -> str:
@@ -597,6 +1037,11 @@ def _format_text_report(report: dict[str, Any]) -> str:
         f"failed_rules: {report['summary']['failed_rules']}",
         f"total_issues: {report['summary']['total_issues']}",
     ]
+    for layer, item in report["layer_summary"].items():
+        lines.append(
+            f"layer[{layer}]: tests={item['tests']} omitted={item['omitted']} "
+            f"rules={item['rules_touched']} coverage={_to_percent(item['rule_coverage'])}%"
+        )
     for rule in report["rules"]:
         lines.append(f"{rule['status']} {rule['rule_id']} {rule['name']}")
         lines.append(f"  summary: {rule['summary_text']}")
@@ -604,12 +1049,27 @@ def _format_text_report(report: dict[str, Any]) -> str:
             "  coverage: "
             f"impl={_to_percent(rule['coverage']['implementation_ref_coverage'])}% "
             f"test={_to_percent(rule['coverage']['test_case_coverage'])}% "
+            f"layer={_to_percent(rule['coverage']['test_layer_coverage'])}% "
             f"traceability={_to_percent(rule['coverage']['traceability_coverage'])}%"
         )
+        if rule["layer_summary"]:
+            for layer, item in rule["layer_summary"].items():
+                lines.append(
+                    f"  layer[{layer}]: tests={item['tests']} omitted={item['omitted']}"
+                )
         for issue in rule["issues"]:
             lines.append(f"  issue[{issue['code']}]: {issue['message']}")
     for issue in report["issues"]:
-        if issue["code"] in {"UNMAPPED_IMPLEMENTATION_ID", "UNMAPPED_TEST_ID", "DUPLICATE_TEST_ID"}:
+        if issue["code"] in {
+            "UNMAPPED_IMPLEMENTATION_ID",
+            "UNMAPPED_TEST_ID",
+            "DUPLICATE_TEST_ID",
+            "INVALID_IMPLEMENTATION_COMMENT_FORMAT",
+            "INVALID_TEST_COMMENT_FORMAT",
+            "INVALID_RELATED_RULES_COMMENT_FORMAT",
+            "UNKNOWN_RELATED_RULE_ID",
+            "MISSING_REVERSE_RULE_RELATION_CONFIG",
+        }:
             lines.append(f"issue[{issue['code']}]: {issue['message']}")
     return "\n".join(lines)
 
@@ -641,6 +1101,15 @@ def _format_markdown_report(report: dict[str, Any]) -> str:
     else:
         lines.append("- None")
 
+    lines.extend(["", "## Test Layer Summary", ""])
+    lines.append("| Layer | Tests | Omitted | Rules Touched | Rule Coverage |")
+    lines.append("| --- | --- | --- | --- | --- |")
+    for layer, item in report["layer_summary"].items():
+        lines.append(
+            f"| `{layer}` | `{item['tests']}` | `{item['omitted']}` | "
+            f"`{item['rules_touched']}` | `{_to_percent(item['rule_coverage'])}%` |"
+        )
+
     lines.extend(["", "## Traceability Summary", ""])
     lines.append("| Rule | Status | Implementation | Test Cases | Coverage | Summary |")
     lines.append("| --- | --- | --- | --- | --- | --- |")
@@ -670,8 +1139,23 @@ def _format_markdown_report(report: dict[str, Any]) -> str:
             "- Coverage: "
             f"Implementation `{_to_percent(rule['coverage']['implementation_ref_coverage'])}%`, "
             f"Test Cases `{_to_percent(rule['coverage']['test_case_coverage'])}%`, "
+            f"Test Layers `{_to_percent(rule['coverage']['test_layer_coverage'])}%`, "
             f"Traceability `{_to_percent(rule['coverage']['traceability_coverage'])}%`"
         )
+        if rule["required_test_layers"]:
+            lines.append(
+                f"- Required Test Layers: {', '.join(f'`{layer}`' for layer in rule['required_test_layers'])}"
+            )
+        if rule["missing_test_layers"]:
+            lines.append(
+                f"- Missing Test Layers: {', '.join(f'`{layer}`' for layer in rule['missing_test_layers'])}"
+            )
+        if rule["layer_summary"]:
+            lines.append("- Layer Summary:")
+            for layer, item in rule["layer_summary"].items():
+                lines.append(
+                    f"  - `{layer}`: tests `{item['tests']}`, omitted `{item['omitted']}`"
+                )
         if rule["implementation_refs"]:
             lines.append("- Implementation Refs:")
             for item in rule["implementation_refs"]:
@@ -733,7 +1217,17 @@ def _format_markdown_report(report: dict[str, Any]) -> str:
     global_issues = [
         issue
         for issue in report["issues"]
-        if issue["code"] in {"UNMAPPED_IMPLEMENTATION_ID", "UNMAPPED_TEST_ID", "DUPLICATE_TEST_ID"}
+        if issue["code"]
+        in {
+            "UNMAPPED_IMPLEMENTATION_ID",
+            "UNMAPPED_TEST_ID",
+            "DUPLICATE_TEST_ID",
+            "INVALID_IMPLEMENTATION_COMMENT_FORMAT",
+            "INVALID_TEST_COMMENT_FORMAT",
+            "INVALID_RELATED_RULES_COMMENT_FORMAT",
+            "UNKNOWN_RELATED_RULE_ID",
+            "MISSING_REVERSE_RULE_RELATION_CONFIG",
+        }
     ]
     if global_issues:
         for issue in global_issues:

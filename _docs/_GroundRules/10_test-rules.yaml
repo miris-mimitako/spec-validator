@@ -25,6 +25,8 @@ document_rules:
     - status
     - test_patterns
     - omitted_rule
+    - comment_extraction
+    - test_layers
   test_pattern_required_fields:
     - pattern_id
     - description
@@ -32,6 +34,7 @@ document_rules:
     - generated_cases
     - minimum_cases
     - semantics
+    - multi_rule_support
   generated_case_required_fields:
     - suffix
     - sequence_required
@@ -87,6 +90,242 @@ test_patterns:
         - domain-rule-002-NULL-OUT-001
         - domain-rule-002-EMPTY-OUT-001
         - domain-rule-002-VALID-IN-001
+    multi_rule_support:
+      enabled: false
+
+  - pattern_id: lower-boundary-only
+    description: >
+      Use when a rule has only a lower boundary and there is no meaningful upper boundary.
+    applies_to_rule_types:
+      - boundary
+    generated_cases:
+      - suffix: LOWER-OUT
+        sequence_required: true
+        description: value just below the lower boundary
+      - suffix: LOWER-IN
+        sequence_required: true
+        description: value exactly on the lower boundary
+      - suffix: VALID-IN
+        sequence_required: true
+        description: valid value above the lower boundary
+    minimum_cases: 3
+    semantics:
+      case_id_examples:
+        - domain-rule-010-LOWER-OUT-001
+        - domain-rule-010-LOWER-IN-001
+        - domain-rule-010-VALID-IN-001
+    multi_rule_support:
+      enabled: false
+
+  - pattern_id: upper-boundary-only
+    description: >
+      Use when a rule has only an upper boundary and there is no meaningful lower boundary.
+    applies_to_rule_types:
+      - boundary
+    generated_cases:
+      - suffix: VALID-IN
+        sequence_required: true
+        description: valid value below the upper boundary
+      - suffix: UPPER-IN
+        sequence_required: true
+        description: value exactly on the upper boundary
+      - suffix: UPPER-OUT
+        sequence_required: true
+        description: value just above the upper boundary
+    minimum_cases: 3
+    semantics:
+      case_id_examples:
+        - domain-rule-011-VALID-IN-001
+        - domain-rule-011-UPPER-IN-001
+        - domain-rule-011-UPPER-OUT-001
+    multi_rule_support:
+      enabled: false
+
+  - pattern_id: format-basic
+    description: >
+      Use when a field or value object must match a specific format or regular expression.
+    applies_to_rule_types:
+      - format
+    generated_cases:
+      - suffix: FORMAT-VALID
+        sequence_required: true
+        description: correctly formatted value is accepted
+      - suffix: FORMAT-INVALID
+        sequence_required: true
+        description: malformed value is rejected
+      - suffix: FORMAT-EDGE
+        sequence_required: true
+        description: edge formatting case is handled as specified
+    minimum_cases: 3
+    semantics:
+      case_id_examples:
+        - domain-rule-020-FORMAT-VALID-001
+        - domain-rule-020-FORMAT-INVALID-001
+        - domain-rule-020-FORMAT-EDGE-001
+    multi_rule_support:
+      enabled: false
+
+  - pattern_id: enum-basic
+    description: >
+      Use when a value must belong to an explicit set of allowed values.
+    applies_to_rule_types:
+      - custom
+      - format
+    generated_cases:
+      - suffix: ENUM-VALID
+        sequence_required: true
+        description: allowed enum value is accepted
+      - suffix: ENUM-INVALID
+        sequence_required: true
+        description: disallowed enum value is rejected
+      - suffix: ENUM-UNKNOWN
+        sequence_required: true
+        description: unknown or future enum value is handled as specified
+    minimum_cases: 3
+    semantics:
+      case_id_examples:
+        - domain-rule-021-ENUM-VALID-001
+        - domain-rule-021-ENUM-INVALID-001
+        - domain-rule-021-ENUM-UNKNOWN-001
+    multi_rule_support:
+      enabled: false
+
+  - pattern_id: uniqueness-basic
+    description: >
+      Use when duplicate values or resources must be rejected or specially handled.
+    applies_to_rule_types:
+      - uniqueness
+    generated_cases:
+      - suffix: UNIQUE-NEW
+        sequence_required: true
+        description: new unique value is accepted
+      - suffix: UNIQUE-DUPLICATE
+        sequence_required: true
+        description: duplicate value is rejected
+      - suffix: UNIQUE-IDEMPOTENT
+        sequence_required: true
+        description: duplicate request is handled idempotently when specified
+    minimum_cases: 3
+    semantics:
+      case_id_examples:
+        - domain-rule-030-UNIQUE-NEW-001
+        - domain-rule-030-UNIQUE-DUPLICATE-001
+        - domain-rule-030-UNIQUE-IDEMPOTENT-001
+    multi_rule_support:
+      enabled: false
+
+  - pattern_id: state-transition-basic
+    description: >
+      Use when an entity or aggregate must transition only through allowed states.
+    applies_to_rule_types:
+      - state_transition
+    generated_cases:
+      - suffix: TRANSITION-VALID
+        sequence_required: true
+        description: allowed transition succeeds
+      - suffix: TRANSITION-INVALID
+        sequence_required: true
+        description: forbidden transition is rejected
+      - suffix: TRANSITION-PRECONDITION
+        sequence_required: true
+        description: transition precondition is enforced
+    minimum_cases: 3
+    semantics:
+      case_id_examples:
+        - domain-rule-040-TRANSITION-VALID-001
+        - domain-rule-040-TRANSITION-INVALID-001
+        - domain-rule-040-TRANSITION-PRECONDITION-001
+    multi_rule_support:
+      enabled: false
+
+  - pattern_id: authorization-basic
+    description: >
+      Use when access depends on actor role, permission, or ownership.
+    applies_to_rule_types:
+      - authorization
+    generated_cases:
+      - suffix: AUTH-ALLOW
+        sequence_required: true
+        description: authorized actor is allowed
+      - suffix: AUTH-DENY
+        sequence_required: true
+        description: unauthorized actor is denied
+      - suffix: AUTH-ANONYMOUS
+        sequence_required: true
+        description: anonymous access is handled as specified
+    minimum_cases: 3
+    semantics:
+      case_id_examples:
+        - domain-rule-050-AUTH-ALLOW-001
+        - domain-rule-050-AUTH-DENY-001
+        - domain-rule-050-AUTH-ANONYMOUS-001
+    multi_rule_support:
+      enabled: false
+
+  - pattern_id: side-effect-basic
+    description: >
+      Use when the rule requires or forbids externally visible side effects.
+    applies_to_rule_types:
+      - custom
+      - state_transition
+    generated_cases:
+      - suffix: SIDEEFFECT-EMIT
+        sequence_required: true
+        description: expected side effect occurs
+      - suffix: SIDEEFFECT-NONE
+        sequence_required: true
+        description: side effect must not occur
+      - suffix: SIDEEFFECT-ROLLBACK
+        sequence_required: true
+        description: side effect is cancelled or rolled back on failure
+    minimum_cases: 3
+    semantics:
+      case_id_examples:
+        - domain-rule-060-SIDEEFFECT-EMIT-001
+        - domain-rule-060-SIDEEFFECT-NONE-001
+        - domain-rule-060-SIDEEFFECT-ROLLBACK-001
+    multi_rule_support:
+      enabled: false
+
+  - pattern_id: cross-rule-combination
+    description: >
+      Use for integration tests that validate behavior produced by multiple domain rules together.
+    applies_to_rule_types:
+      - boundary
+      - required
+      - format
+      - state_transition
+      - custom
+    generated_cases:
+      - suffix: COMBO-VALID
+        sequence_required: true
+        description: multiple related rules are satisfied together
+      - suffix: COMBO-INVALID
+        sequence_required: true
+        description: a combination of related rules fails together
+      - suffix: COMBO-PRIORITY
+        sequence_required: true
+        description: precedence or evaluation order between related rules is verified
+    minimum_cases: 3
+    semantics:
+      case_id_examples:
+        - domain-rule-002-COMBO-VALID-001
+        - domain-rule-002-COMBO-INVALID-001
+        - domain-rule-002-COMBO-PRIORITY-001
+      note: >
+        Use TRACE-RULES to declare all related rule ids that participate in the same integration test.
+    multi_rule_support:
+      enabled: true
+      required_metadata_comment_pattern: "^\\s*//\\s*TRACE-RULES:\\s*(domain-rule-[0-9]{3}(?:\\s*,\\s*domain-rule-[0-9]{3})+)\\s*$"
+      minimum_related_rules: 2
+      relation_must_include_primary_rule: true
+      examples:
+        valid:
+          - "// TRACE: domain-rule-002-COMBO-INVALID-001"
+          - "// TRACE-RULES: domain-rule-001, domain-rule-002"
+        invalid:
+          - "// TRACE-RULES: domain-rule-002"
+          - "// TRACE-RULES: user-rule-001, domain-rule-002"
 
 omitted_rule:
   allowed: true
@@ -106,6 +345,51 @@ omitted_rule:
       - domain-rule-001-LOWER-OUT-001 OMITTED
       - domain-rule-001-LOWER-OUT-OMITTED reason none
 
+comment_extraction:
+  require_annotation_in_comment: true
+  comment_style: line_comment_with_trace_prefix
+  implementation_comment_pattern: "^\\s*//\\s*TRACE:\\s*(domain-rule-[0-9]{3}-impl)\\s*$"
+  test_comment_pattern: "^\\s*//\\s*TRACE:\\s*(domain-rule-[0-9]{3}-[A-Z-]+-[0-9]{3})\\s*$"
+  omitted_comment_pattern: "^\\s*//\\s*TRACE:\\s*(domain-rule-[0-9]{3}-[A-Z-]+-OMITTED)\\s+Reason:\\s+(.+)$"
+  related_rules_comment_pattern: "^\\s*//\\s*TRACE-RULES:\\s*(domain-rule-[0-9]{3}(?:\\s*,\\s*domain-rule-[0-9]{3})+)\\s*$"
+  loose_detection:
+    enabled: true
+    implementation_token_pattern: "domain-rule-[0-9]{3}-impl"
+    test_token_pattern: "domain-rule-[0-9]{3}-[A-Z-]+-[0-9]{3}"
+    omitted_token_pattern: "domain-rule-[0-9]{3}-[A-Z-]+-OMITTED"
+    related_rule_token_pattern: "domain-rule-[0-9]{3}(?:\\s*,\\s*domain-rule-[0-9]{3})+"
+  invalid_format_is_error: true
+  examples:
+    valid:
+      - "// TRACE: domain-rule-001-impl"
+      - "// TRACE: domain-rule-001-LOWER-OUT-001"
+      - "// TRACE: domain-rule-001-LOWER-OUT-OMITTED Reason: unsigned integer cannot represent negative values"
+      - "// TRACE-RULES: domain-rule-001, domain-rule-002"
+    invalid:
+      - "// domain-rule-001-impl"
+      - "domain-rule-001-LOWER-OUT-001"
+      - "// TRACE domain-rule-001-LOWER-OUT-001"
+      - "// TRACE-RULES domain-rule-001, domain-rule-002"
+
+test_layers:
+  default_layer: UNKNOWN
+  definitions:
+    - layer_id: UT
+      description: unit test layer
+      path_patterns:
+        - "[\\\\/]test[\\\\/]ut[\\\\/]"
+        - "[\\\\/]__tests__[\\\\/]unit[\\\\/]"
+    - layer_id: IT
+      description: integration test layer
+      path_patterns:
+        - "[\\\\/]test[\\\\/]it[\\\\/]"
+        - "[\\\\/]integration[\\\\/]"
+    - layer_id: E2E
+      description: end-to-end test layer
+      path_patterns:
+        - "[\\\\/]test[\\\\/]e2e[\\\\/]"
+        - "[\\\\/]e2e[\\\\/]"
+
 traceability_rules:
   implementation_annotation:
     required_pattern: "^domain-rule-[0-9]{3}-impl$"
@@ -119,6 +403,7 @@ traceability_rules:
     include_missing_test_cases: true
     include_omitted_cases: true
     include_unmapped_test_ids: true
+    include_test_layer_summary: true
 
 validation_examples:
   expected_generated_ids_for_domain_rule_001:

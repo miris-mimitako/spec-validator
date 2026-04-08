@@ -1,4 +1,4 @@
 export class UserName {
-  // domain-rule-999-impl
+  // TRACE: domain-rule-999-impl
   constructor(private readonly value: string) {}
 }
