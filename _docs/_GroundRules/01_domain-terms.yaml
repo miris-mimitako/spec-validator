@@ -1,0 +1,165 @@
+version: 1
+id: domain-terms
+status: sample
+
+description: >
+  ドメイン用語辞書のサンプル。
+  Python の命名判定器はこの辞書を参照して、名前に含まれる主語が
+  正当なドメイン語かどうかを判定する。
+
+schema:
+  required_fields:
+    - term
+    - canonical
+    - category
+    - aliases
+    - forbidden_aliases
+    - allowed_role_suffixes
+    - description
+  category_values:
+    - aggregate
+    - entity
+    - value_object
+    - domain_event
+    - process
+    - policy
+
+defaults:
+  alias_match: exact_token
+  case_sensitive: true
+  allow_unregistered_term: false
+
+terms:
+  - term: Order
+    canonical: Order
+    category: aggregate
+    aliases: []
+    forbidden_aliases:
+      - Purchase
+      - OrderData
+    allowed_role_suffixes:
+      - Repository
+      - UseCase
+      - Controller
+      - DTO
+      - Mapper
+      - Policy
+      - Specification
+    description: 受注を表す集約
+
+  - term: OrderId
+    canonical: OrderId
+    category: value_object
+    aliases: []
+    forbidden_aliases:
+      - OrderNo
+      - OrderNumber
+    allowed_role_suffixes:
+      - DTO
+      - Mapper
+    description: 受注識別子
+
+  - term: Customer
+    canonical: Customer
+    category: aggregate
+    aliases:
+      - Client
+    forbidden_aliases:
+      - User
+      - Member
+    allowed_role_suffixes:
+      - Repository
+      - UseCase
+      - Controller
+      - DTO
+      - Mapper
+      - Policy
+    description: 顧客を表す集約
+
+  - term: CustomerId
+    canonical: CustomerId
+    category: value_object
+    aliases: []
+    forbidden_aliases:
+      - UserId
+      - ClientId
+    allowed_role_suffixes:
+      - DTO
+      - Mapper
+    description: 顧客識別子
+
+  - term: Payment
+    canonical: Payment
+    category: entity
+    aliases: []
+    forbidden_aliases:
+      - Settlement
+    allowed_role_suffixes:
+      - Repository
+      - UseCase
+      - DTO
+      - Mapper
+      - Policy
+    description: 支払いを表すエンティティ
+
+  - term: BillingPolicy
+    canonical: BillingPolicy
+    category: policy
+    aliases: []
+    forbidden_aliases:
+      - ChargeRule
+    allowed_role_suffixes: []
+    description: 請求ルールを表すポリシー
+
+  - term: PlaceOrder
+    canonical: PlaceOrder
+    category: process
+    aliases:
+      - CreateOrder
+    forbidden_aliases:
+      - RegisterOrder
+    allowed_role_suffixes:
+      - UseCase
+      - CommandHandler
+      - Controller
+      - DTO
+    description: 受注登録処理
+
+  - term: CancelOrder
+    canonical: CancelOrder
+    category: process
+    aliases: []
+    forbidden_aliases:
+      - DeleteOrder
+      - RemoveOrder
+    allowed_role_suffixes:
+      - UseCase
+      - CommandHandler
+      - Controller
+      - DTO
+    description: 受注取消処理
+
+  - term: OrderPlaced
+    canonical: OrderPlaced
+    category: domain_event
+    aliases: []
+    forbidden_aliases:
+      - OrderCreated
+    allowed_role_suffixes:
+      - EventHandler
+      - DTO
+    description: 受注確定時に発行されるドメインイベント
+
+validation_samples:
+  valid_names:
+    - OrderRepository
+    - PlaceOrderUseCase
+    - OrderController
+    - CustomerDTO
+    - OrderPlacedEventHandler
+  invalid_names:
+    - OrderManager
+    - UserRepository
+    - CreateOrderManager
+    - SettlementService
+    - CommonHelper

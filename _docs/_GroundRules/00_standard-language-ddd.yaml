@@ -1,0 +1,355 @@
+version: 1
+id: standard-language-ddd
+status: draft
+
+policy:
+  target_framework: nestjs
+  target_language: typescript
+  naming_strategy: preserve_framework_terms_and_add_missing_ddd_terms
+  description: >
+    NestJS が持つ標準語彙は原則そのまま採用する。
+    DDD で必要だが NestJS 標準に存在しない概念は追加定義する。
+    標準語彙を独自語へ置換してはならない。
+
+decision_rules:
+  framework_terms:
+    preserve_as_is: true
+    allow_alias: false
+    allow_translation: false
+    note: >
+      NestJS の標準語彙は、そのまま利用する。
+      例: Module, Controller, Injectable, Guard, Interceptor, Pipe, Filter
+  missing_ddd_terms:
+    add_if_missing: true
+    create_project_standard: true
+    note: >
+      DDD 上必要な概念で NestJS に標準語彙がない場合は、
+      プロジェクト標準語彙として追加する。
+  generic_terms:
+    forbid_generic_primary_name: true
+    note: >
+      汎用語は主語として使用してはならない。
+
+term_schema:
+  required_fields:
+    - term
+    - category
+    - layer
+    - source
+    - allowed_targets
+    - aliases
+    - description
+  category_values:
+    - framework
+    - ddd
+    - test
+    - generic_forbidden
+  layer_values:
+    - presentation
+    - application
+    - domain
+    - infrastructure
+    - cross_layer
+    - test
+
+terms:
+  framework:
+    - term: Module
+      category: framework
+      layer: presentation
+      source: nestjs
+      allowed_targets: [class, file, directory]
+      aliases: []
+      description: NestJS module boundary
+    - term: Controller
+      category: framework
+      layer: presentation
+      source: nestjs
+      allowed_targets: [class, file]
+      aliases: []
+      description: HTTP or transport entry point
+    - term: Injectable
+      category: framework
+      layer: cross_layer
+      source: nestjs
+      allowed_targets: [decorator]
+      aliases: []
+      description: NestJS dependency injection decorator
+    - term: Guard
+      category: framework
+      layer: presentation
+      source: nestjs
+      allowed_targets: [class, file]
+      aliases: []
+      description: request authorization or access control
+    - term: Pipe
+      category: framework
+      layer: presentation
+      source: nestjs
+      allowed_targets: [class, file]
+      aliases: []
+      description: request transformation and validation
+    - term: Interceptor
+      category: framework
+      layer: presentation
+      source: nestjs
+      allowed_targets: [class, file]
+      aliases: []
+      description: request or response interception
+    - term: Filter
+      category: framework
+      layer: presentation
+      source: nestjs
+      allowed_targets: [class, file]
+      aliases: []
+      description: exception filter
+    - term: Middleware
+      category: framework
+      layer: presentation
+      source: nestjs
+      allowed_targets: [class, file]
+      aliases: []
+      description: request middleware
+    - term: Decorator
+      category: framework
+      layer: cross_layer
+      source: typescript
+      allowed_targets: [function, file]
+      aliases: []
+      description: TypeScript decorator
+    - term: Resolver
+      category: framework
+      layer: presentation
+      source: nestjs_graphql
+      allowed_targets: [class, file]
+      aliases: []
+      description: GraphQL resolver
+    - term: Gateway
+      category: framework
+      layer: presentation
+      source: nestjs_websocket
+      allowed_targets: [class, file]
+      aliases: []
+      description: WebSocket gateway
+    - term: CommandHandler
+      category: framework
+      layer: application
+      source: nestjs_cqrs
+      allowed_targets: [class, file]
+      aliases: []
+      description: NestJS CQRS command handler
+    - term: QueryHandler
+      category: framework
+      layer: application
+      source: nestjs_cqrs
+      allowed_targets: [class, file]
+      aliases: []
+      description: NestJS CQRS query handler
+    - term: EventHandler
+      category: framework
+      layer: application
+      source: nestjs_cqrs
+      allowed_targets: [class, file]
+      aliases: []
+      description: NestJS CQRS event handler
+
+  ddd:
+    - term: Entity
+      category: ddd
+      layer: domain
+      source: ddd
+      allowed_targets: [class, file]
+      aliases: []
+      description: domain entity
+    - term: ValueObject
+      category: ddd
+      layer: domain
+      source: ddd
+      allowed_targets: [class, file]
+      aliases: [VO]
+      description: domain value object
+    - term: Aggregate
+      category: ddd
+      layer: domain
+      source: ddd
+      allowed_targets: [class, file]
+      aliases: []
+      description: aggregate root or aggregate boundary
+    - term: DomainService
+      category: ddd
+      layer: domain
+      source: ddd
+      allowed_targets: [class, file]
+      aliases: []
+      description: domain service
+    - term: Repository
+      category: ddd
+      layer: domain
+      source: ddd
+      allowed_targets: [interface, class, file]
+      aliases: []
+      description: domain repository contract or implementation name suffix
+    - term: Factory
+      category: ddd
+      layer: domain
+      source: ddd
+      allowed_targets: [class, file]
+      aliases: []
+      description: domain factory
+    - term: DomainEvent
+      category: ddd
+      layer: domain
+      source: ddd
+      allowed_targets: [class, file]
+      aliases: []
+      description: domain event
+    - term: UseCase
+      category: ddd
+      layer: application
+      source: project_standard
+      allowed_targets: [class, file]
+      aliases: [ApplicationService]
+      description: application use case boundary
+    - term: Specification
+      category: ddd
+      layer: domain
+      source: ddd
+      allowed_targets: [class, file]
+      aliases: []
+      description: business rule specification
+    - term: Policy
+      category: ddd
+      layer: domain
+      source: project_standard
+      allowed_targets: [class, file]
+      aliases: []
+      description: business policy object
+    - term: Mapper
+      category: ddd
+      layer: infrastructure
+      source: project_standard
+      allowed_targets: [class, file]
+      aliases: []
+      description: mapping between external model and domain model
+    - term: DTO
+      category: ddd
+      layer: application
+      source: project_standard
+      allowed_targets: [class, file]
+      aliases: [Dto]
+      description: data transfer object
+
+  test:
+    - term: Test
+      category: test
+      layer: test
+      source: testing
+      allowed_targets: [class, file]
+      aliases: []
+      description: test subject suffix
+    - term: Fixture
+      category: test
+      layer: test
+      source: testing
+      allowed_targets: [class, file]
+      aliases: []
+      description: test fixture
+    - term: Stub
+      category: test
+      layer: test
+      source: testing
+      allowed_targets: [class, file]
+      aliases: []
+      description: test stub
+    - term: Mock
+      category: test
+      layer: test
+      source: testing
+      allowed_targets: [class, file]
+      aliases: []
+      description: test mock
+    - term: Fake
+      category: test
+      layer: test
+      source: testing
+      allowed_targets: [class, file]
+      aliases: []
+      description: test fake
+    - term: Spy
+      category: test
+      layer: test
+      source: testing
+      allowed_targets: [class, file]
+      aliases: []
+      description: test spy
+
+  generic_forbidden:
+    - term: Manager
+      category: generic_forbidden
+      layer: cross_layer
+      source: project_rule
+      allowed_targets: []
+      aliases: []
+      description: forbidden generic role name
+    - term: Helper
+      category: generic_forbidden
+      layer: cross_layer
+      source: project_rule
+      allowed_targets: []
+      aliases: []
+      description: forbidden generic role name
+    - term: Util
+      category: generic_forbidden
+      layer: cross_layer
+      source: project_rule
+      allowed_targets: []
+      aliases: [Utils]
+      description: forbidden generic role name
+    - term: Common
+      category: generic_forbidden
+      layer: cross_layer
+      source: project_rule
+      allowed_targets: []
+      aliases: []
+      description: forbidden generic role name
+    - term: Info
+      category: generic_forbidden
+      layer: cross_layer
+      source: project_rule
+      allowed_targets: []
+      aliases: []
+      description: forbidden generic role name
+    - term: Data
+      category: generic_forbidden
+      layer: cross_layer
+      source: project_rule
+      allowed_targets: []
+      aliases: []
+      description: forbidden generic role name
+    - term: Base
+      category: generic_forbidden
+      layer: cross_layer
+      source: project_rule
+      allowed_targets: []
+      aliases: []
+      description: forbidden generic role name
+    - term: Impl
+      category: generic_forbidden
+      layer: cross_layer
+      source: project_rule
+      allowed_targets: []
+      aliases: []
+      description: forbidden generic role name
+
+validation_hints:
+  class_name_case: PascalCase
+  function_name_case: camelCase
+  file_name_case: kebab-case
+  domain_term_must_exist_in_dictionary: true
+  framework_term_must_be_from_registered_list: true
+  forbidden_term_match_mode: exact_token
+  aliases_allowed_only_when_registered: true
+
+future_files:
+  domain_dictionary: _docs/_GroundRules/01_domain-terms.yaml
+  naming_exceptions: _docs/_GroundRules/90_naming-exceptions.yaml

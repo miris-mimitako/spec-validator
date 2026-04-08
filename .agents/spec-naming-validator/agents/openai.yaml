@@ -1,0 +1,4 @@
+interface:
+  display_name: "Spec Naming Validator"
+  short_description: "Validate NestJS and DDD naming rules"
+  default_prompt: "Use $spec-naming-validator to validate names against this repository's NestJS and DDD term dictionaries."

@@ -1,0 +1,2 @@
+"""spec-validator package."""
+
