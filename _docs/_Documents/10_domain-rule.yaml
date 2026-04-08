@@ -26,6 +26,7 @@ document_rules:
   rule_required_fields:
     - rule_id
     - name
+    - status
     - summary
     - rule_type
     - target
@@ -33,6 +34,9 @@ document_rules:
     - test_rule_refs
     - implementation
     - traceability
+  rule_status_values:
+    - active
+    - planned
   rule_type_values:
     - boundary
     - format
@@ -49,6 +53,7 @@ domains:
     rules:
       - rule_id: domain-rule-001
         name: user-id-length
+        status: active
         summary: user-id must be between 3 and 10 characters inclusive
         rule_type: boundary
         target:
@@ -91,6 +96,7 @@ domains:
 
       - rule_id: domain-rule-002
         name: user-id-required
+        status: active
         summary: user-id must be present
         rule_type: required
         target:
@@ -125,6 +131,236 @@ domains:
             - domain-rule-001
           minimum_implementation_refs: 1
           minimum_test_refs: 6
+
+      - rule_id: domain-rule-003
+        name: user-id-format
+        status: active
+        summary: user-id must use lowercase alphanumeric characters and hyphen only
+        rule_type: format
+        target:
+          bounded_context: identity
+          aggregate: User
+          field: userId
+          data_type: string
+        specification:
+          natural_language:
+            - user-id must contain only lowercase letters, digits, and hyphen
+            - user-id must start with a lowercase letter
+          machine_constraints:
+            regex: "^[a-z][a-z0-9-]*$"
+        test_rule_refs:
+          - format-basic
+        implementation:
+          required: true
+          implementation_id: domain-rule-003-impl
+          expected_locations:
+            - src/domain/user/user-id.ts
+        traceability:
+          required_test_patterns:
+            - format-basic
+          required_test_layers:
+            - UT
+            - IT
+          minimum_implementation_refs: 1
+          minimum_test_refs: 3
+
+      - rule_id: domain-rule-004
+        name: user-display-name-min-length
+        status: active
+        summary: display-name must be at least 1 character
+        rule_type: boundary
+        target:
+          bounded_context: identity
+          aggregate: UserProfile
+          field: displayName
+          data_type: string
+        specification:
+          natural_language:
+            - display-name must contain at least one visible character
+          machine_constraints:
+            min_length: 1
+            inclusive_min: true
+        test_rule_refs:
+          - lower-boundary-only
+        implementation:
+          required: true
+          implementation_id: domain-rule-004-impl
+          expected_locations:
+            - src/domain/user/display-name.ts
+        traceability:
+          required_test_patterns:
+            - lower-boundary-only
+          required_test_layers:
+            - UT
+          minimum_implementation_refs: 1
+          minimum_test_refs: 3
+
+      - rule_id: domain-rule-005
+        name: user-bio-max-length
+        status: active
+        summary: bio must be 160 characters or fewer
+        rule_type: boundary
+        target:
+          bounded_context: identity
+          aggregate: UserProfile
+          field: bio
+          data_type: string
+        specification:
+          natural_language:
+            - bio must be at most 160 characters
+          machine_constraints:
+            max_length: 160
+            inclusive_max: true
+        test_rule_refs:
+          - upper-boundary-only
+        implementation:
+          required: true
+          implementation_id: domain-rule-005-impl
+          expected_locations:
+            - src/domain/user/bio.ts
+        traceability:
+          required_test_patterns:
+            - upper-boundary-only
+          required_test_layers:
+            - UT
+          minimum_implementation_refs: 1
+          minimum_test_refs: 3
+
+      - rule_id: domain-rule-006
+        name: user-email-uniqueness
+        status: planned
+        summary: email address must be unique across active users
+        rule_type: uniqueness
+        target:
+          bounded_context: identity
+          aggregate: User
+          field: email
+          data_type: string
+        specification:
+          natural_language:
+            - active users must not share the same email address
+          machine_constraints:
+            unique_scope: active_users
+        test_rule_refs:
+          - uniqueness-basic
+        implementation:
+          required: true
+          implementation_id: domain-rule-006-impl
+          expected_locations:
+            - src/application/user/register-user.use-case.ts
+            - src/infrastructure/user/user-repository.ts
+        traceability:
+          required_test_patterns:
+            - uniqueness-basic
+          required_test_layers:
+            - IT
+          minimum_implementation_refs: 1
+          minimum_test_refs: 3
+
+      - rule_id: domain-rule-007
+        name: user-status-transition
+        status: planned
+        summary: user status may transition from pending to active, but not from banned to active directly
+        rule_type: state_transition
+        target:
+          bounded_context: identity
+          aggregate: User
+          field: status
+          data_type: enum
+        specification:
+          natural_language:
+            - pending may transition to active
+            - banned must not transition directly to active
+          machine_constraints:
+            allowed_transitions:
+              pending: [active, banned]
+              active: [banned]
+              banned: []
+        test_rule_refs:
+          - state-transition-basic
+        implementation:
+          required: true
+          implementation_id: domain-rule-007-impl
+          expected_locations:
+            - src/domain/user/user-status.ts
+            - src/domain/user/user.ts
+        traceability:
+          required_test_patterns:
+            - state-transition-basic
+          required_test_layers:
+            - UT
+            - IT
+          minimum_implementation_refs: 1
+          minimum_test_refs: 3
+
+      - rule_id: domain-rule-008
+        name: user-read-authorization
+        status: planned
+        summary: only the owner or admin may read the user profile
+        rule_type: authorization
+        target:
+          bounded_context: identity
+          aggregate: UserProfile
+          field: readAccess
+          data_type: policy
+        specification:
+          natural_language:
+            - admin may read any user profile
+            - owner may read own user profile
+            - other actors must be denied
+          machine_constraints:
+            allow_roles:
+              - admin
+            allow_owner: true
+        test_rule_refs:
+          - authorization-basic
+        implementation:
+          required: true
+          implementation_id: domain-rule-008-impl
+          expected_locations:
+            - src/application/user/get-user-profile.use-case.ts
+            - src/presentation/http/user.controller.ts
+        traceability:
+          required_test_patterns:
+            - authorization-basic
+          required_test_layers:
+            - IT
+            - E2E
+          minimum_implementation_refs: 1
+          minimum_test_refs: 3
+
+      - rule_id: domain-rule-009
+        name: user-registered-event
+        status: planned
+        summary: successful user registration must emit UserRegistered event and avoid emission on failure
+        rule_type: custom
+        target:
+          bounded_context: identity
+          aggregate: User
+          field: registrationSideEffect
+          data_type: event
+        specification:
+          natural_language:
+            - successful registration emits UserRegistered
+            - failed registration emits no registration event
+          machine_constraints:
+            emits_event: UserRegistered
+            emit_on_success_only: true
+        test_rule_refs:
+          - side-effect-basic
+        implementation:
+          required: true
+          implementation_id: domain-rule-009-impl
+          expected_locations:
+            - src/application/user/register-user.use-case.ts
+            - src/domain/user/events/user-registered.event.ts
+        traceability:
+          required_test_patterns:
+            - side-effect-basic
+          required_test_layers:
+            - IT
+          minimum_implementation_refs: 1
+          minimum_test_refs: 3
 
 validation_examples:
   valid_implementation_annotations:

@@ -60,6 +60,7 @@ class TestPattern:
 class DomainRule:
     rule_id: str
     name: str
+    status: str
     rule_type: str
     implementation_id: str
     required_test_patterns: list[str]
@@ -88,6 +89,31 @@ def _ratio(numerator: int, denominator: int) -> float:
 
 def _to_percent(value: float) -> int:
     return round(value * 100)
+
+
+ISSUE_SEVERITY: dict[str, str] = {
+    "MISSING_IMPLEMENTATION_REF": "ERROR",
+    "MISSING_TEST_CASE": "ERROR",
+    "MISSING_REQUIRED_TEST_LAYER": "ERROR",
+    "MISSING_COMBINATION_DIRECTION": "ERROR",
+    "MISSING_REVERSE_COMBINATION_DIRECTION": "ERROR",
+    "UNMAPPED_IMPLEMENTATION_ID": "ERROR",
+    "UNMAPPED_TEST_ID": "ERROR",
+    "DUPLICATE_TEST_ID": "ERROR",
+    "UNKNOWN_RELATED_RULE_ID": "ERROR",
+    "MISSING_REVERSE_RULE_RELATION_CONFIG": "ERROR",
+    "INVALID_IMPLEMENTATION_COMMENT_FORMAT": "WARNING",
+    "INVALID_TEST_COMMENT_FORMAT": "WARNING",
+    "INVALID_RELATED_RULES_COMMENT_FORMAT": "WARNING",
+    "INVALID_TRACE_RULES_METADATA": "WARNING",
+    "MISSING_TRACE_RULES_METADATA": "WARNING",
+    "MISSING_RELATED_RULE_IN_TRACE_RULES": "WARNING",
+    "INSUFFICIENT_TEST_REFS": "WARNING",
+}
+
+
+def _issue_severity(code: str) -> str:
+    return ISSUE_SEVERITY.get(code, "INFO")
 
 
 class TraceabilityValidator:
@@ -156,6 +182,7 @@ class TraceabilityValidator:
                 rule = DomainRule(
                     rule_id=item["rule_id"],
                     name=item["name"],
+                    status=item.get("status", "active"),
                     rule_type=item["rule_type"],
                     implementation_id=item["implementation"]["implementation_id"],
                     required_test_patterns=item["traceability"]["required_test_patterns"],
@@ -166,6 +193,8 @@ class TraceabilityValidator:
                     ],
                     minimum_test_refs=item["traceability"]["minimum_test_refs"],
                 )
+                if rule.status != "active":
+                    continue
                 rules[rule.rule_id] = rule
         return rules
 
@@ -357,6 +386,7 @@ class TraceabilityValidator:
         unmapped_test_annotations: list[Annotation] = []
         duplicate_test_ids: list[dict[str, Any]] = []
         invalid_comment_annotations: list[Annotation] = []
+        invalid_case_annotations: dict[tuple[str, str], list[Annotation]] = {}
         directional_combo_links: dict[tuple[str, str], int] = {}
         related_rules_by_location: dict[tuple[str, int], Annotation] = {}
 
@@ -376,6 +406,11 @@ class TraceabilityValidator:
                 continue
             if annotation.annotation_type == "invalid_test_format":
                 invalid_comment_annotations.append(annotation)
+                self._register_invalid_case_annotation(
+                    invalid_case_annotations,
+                    annotation,
+                    expected_case_keys,
+                )
                 continue
             if annotation.annotation_type == "invalid_related_rules_format":
                 invalid_comment_annotations.append(annotation)
@@ -437,6 +472,7 @@ class TraceabilityValidator:
             expected_suffixes = expected_test_ids[rule.rule_id]
             observed_cases: list[dict[str, Any]] = []
             missing_cases: list[dict[str, Any]] = []
+            invalid_cases: list[dict[str, Any]] = []
             case_matrix: list[dict[str, Any]] = []
 
             total_test_refs = 0
@@ -451,25 +487,38 @@ class TraceabilityValidator:
                     rule.rule_id,
                     suffix,
                 )
+                matching_invalid = self._matching_invalid_annotations(
+                    invalid_case_annotations,
+                    rule.rule_id,
+                    suffix,
+                )
                 total_test_refs += len(matching_tests) + len(matching_omitted)
-                case_status = self._case_status(matching_tests, matching_omitted)
+                case_status = self._case_status(
+                    matching_tests,
+                    matching_omitted,
+                    matching_invalid,
+                )
                 case_matrix.append(
                     {
                         "suffix": suffix,
                         "status": case_status,
                         "tests": [self._annotation_to_dict(item) for item in matching_tests],
                         "omitted": [self._annotation_to_dict(item) for item in matching_omitted],
+                        "invalid": [self._annotation_to_dict(item) for item in matching_invalid],
                     }
                 )
-                if matching_tests or matching_omitted:
+                if matching_tests or matching_omitted or matching_invalid:
                     observed_cases.append(
                         {
                             "suffix": suffix,
                             "tests": [self._annotation_to_dict(item) for item in matching_tests],
                             "omitted": [self._annotation_to_dict(item) for item in matching_omitted],
+                            "invalid": [self._annotation_to_dict(item) for item in matching_invalid],
                         }
                     )
-                else:
+                if matching_invalid and not matching_tests and not matching_omitted:
+                    invalid_cases.append({"suffix": suffix})
+                elif not matching_tests and not matching_omitted:
                     missing_cases.append({"suffix": suffix})
 
             rule_issues: list[dict[str, Any]] = []
@@ -565,7 +614,9 @@ class TraceabilityValidator:
                 missing_cases=missing_cases,
                 implementation_refs=implementation_refs,
                 minimum_implementation_refs=rule.minimum_implementation_refs,
-                has_omitted=any(case["status"] == "OMITTED" for case in case_matrix),
+                has_omitted=any(
+                    case["status"] == "OMITTED-ACCEPTED" for case in case_matrix
+                ),
                 rule_issues=rule_issues,
             )
             summary_text = self._build_rule_summary(
@@ -576,6 +627,7 @@ class TraceabilityValidator:
                 missing_cases=missing_cases,
                 case_matrix=case_matrix,
                 missing_layers=missing_layers,
+                invalid_cases=invalid_cases,
                 rule_issues=rule_issues,
             )
 
@@ -594,6 +646,7 @@ class TraceabilityValidator:
                     "observed_cases": observed_cases,
                     "case_matrix": case_matrix,
                     "missing_cases": missing_cases,
+                    "invalid_cases": invalid_cases,
                     "required_test_layers": rule.required_test_layers,
                     "missing_test_layers": missing_layers,
                     "coverage": {
@@ -664,8 +717,18 @@ class TraceabilityValidator:
         passed_rules = [item for item in rule_results if item["valid"]]
         failed_rules = [item for item in rule_results if not item["valid"]]
         issue_counts: dict[str, int] = {}
+        issue_counts_by_severity: dict[str, int] = {"ERROR": 0, "WARNING": 0, "INFO": 0}
         for issue in issues:
             issue_counts[issue["code"]] = issue_counts.get(issue["code"], 0) + 1
+            severity = self._issue_severity(issue["code"])
+            issue_counts_by_severity[severity] = issue_counts_by_severity.get(severity, 0) + 1
+
+        total_omitted_cases = sum(
+            1
+            for rule in rule_results
+            for case in rule["case_matrix"]
+            if case["status"] == "OMITTED-ACCEPTED"
+        )
 
         layer_summary = self._build_global_layer_summary(
             list(observed_test_ids.values()),
@@ -682,9 +745,11 @@ class TraceabilityValidator:
                 "passed_rules": len(passed_rules),
                 "failed_rules": len(failed_rules),
                 "total_issues": len(issues),
+                "total_omitted_accepted_cases": total_omitted_cases,
                 "status": "success" if not issues else "failure",
             },
             "issue_counts": dict(sorted(issue_counts.items())),
+            "issue_counts_by_severity": issue_counts_by_severity,
             "layer_summary": layer_summary,
             "rules": rule_results,
             "issues": issues,
@@ -767,11 +832,14 @@ class TraceabilityValidator:
         self,
         matching_tests: list[Annotation],
         matching_omitted: list[Annotation],
+        matching_invalid: list[Annotation],
     ) -> str:
         if matching_tests:
             return "PASS"
         if matching_omitted:
-            return "OMITTED"
+            return "OMITTED-ACCEPTED"
+        if matching_invalid:
+            return "INVALID"
         return "MISSING"
 
     def _determine_rule_status(
@@ -801,10 +869,11 @@ class TraceabilityValidator:
         missing_cases: list[dict[str, Any]],
         case_matrix: list[dict[str, Any]],
         missing_layers: list[str],
+        invalid_cases: list[dict[str, Any]],
         rule_issues: list[dict[str, Any]],
     ) -> str:
         observed_count = sum(
-            1 for case in case_matrix if case["status"] in {"PASS", "OMITTED"}
+            1 for case in case_matrix if case["status"] in {"PASS", "OMITTED-ACCEPTED"}
         )
         if rule_status == "OK":
             return (
@@ -818,6 +887,9 @@ class TraceabilityValidator:
         if missing_cases:
             missing_suffixes = ", ".join(item["suffix"] for item in missing_cases)
             parts.append(f"missing test cases: {missing_suffixes}")
+        if invalid_cases:
+            invalid_suffixes = ", ".join(item["suffix"] for item in invalid_cases)
+            parts.append(f"invalid test annotations: {invalid_suffixes}")
         if missing_layers:
             parts.append(f"missing test layers: {', '.join(missing_layers)}")
         if not parts and rule_issues:
@@ -864,6 +936,14 @@ class TraceabilityValidator:
                 matches.extend(annotations)
         return matches
 
+    def _matching_invalid_annotations(
+        self,
+        invalid_case_annotations: dict[tuple[str, str], list[Annotation]],
+        rule_id: str,
+        suffix: str,
+    ) -> list[Annotation]:
+        return invalid_case_annotations.get((rule_id, suffix), [])
+
     def _parse_test_id(self, value: str) -> dict[str, str] | None:
         parts = value.split("-")
         if len(parts) < 5:
@@ -893,6 +973,30 @@ class TraceabilityValidator:
             "test_layer": annotation.test_layer,
             "related_rule_ids": annotation.related_rule_ids,
         }
+
+    def _register_invalid_case_annotation(
+        self,
+        invalid_case_annotations: dict[tuple[str, str], list[Annotation]],
+        annotation: Annotation,
+        expected_case_keys: set[tuple[str, str]],
+    ) -> None:
+        parsed = self._parse_test_id(annotation.value)
+        if parsed and (parsed["rule_id"], parsed["suffix"]) in expected_case_keys:
+            invalid_case_annotations.setdefault(
+                (parsed["rule_id"], parsed["suffix"]),
+                [],
+            ).append(annotation)
+            return
+
+        parsed_omitted = self._parse_omitted_id(annotation.value)
+        if parsed_omitted and (parsed_omitted["rule_id"], parsed_omitted["suffix"]) in expected_case_keys:
+            invalid_case_annotations.setdefault(
+                (parsed_omitted["rule_id"], parsed_omitted["suffix"]),
+                [],
+            ).append(annotation)
+
+    def _issue_severity(self, code: str) -> str:
+        return _issue_severity(code)
 
     def _attach_related_rules(
         self,
@@ -1036,7 +1140,10 @@ def _format_text_report(report: dict[str, Any]) -> str:
         f"passed_rules: {report['summary']['passed_rules']}",
         f"failed_rules: {report['summary']['failed_rules']}",
         f"total_issues: {report['summary']['total_issues']}",
+        f"omitted_accepted_cases: {report['summary']['total_omitted_accepted_cases']}",
     ]
+    for severity, count in report["issue_counts_by_severity"].items():
+        lines.append(f"issues[{severity.lower()}]: {count}")
     for layer, item in report["layer_summary"].items():
         lines.append(
             f"layer[{layer}]: tests={item['tests']} omitted={item['omitted']} "
@@ -1052,13 +1159,22 @@ def _format_text_report(report: dict[str, Any]) -> str:
             f"layer={_to_percent(rule['coverage']['test_layer_coverage'])}% "
             f"traceability={_to_percent(rule['coverage']['traceability_coverage'])}%"
         )
+        lines.append(
+            "  case_counts: "
+            f"pass={sum(1 for case in rule['case_matrix'] if case['status'] == 'PASS')} "
+            f"omitted={sum(1 for case in rule['case_matrix'] if case['status'] == 'OMITTED-ACCEPTED')} "
+            f"invalid={sum(1 for case in rule['case_matrix'] if case['status'] == 'INVALID')} "
+            f"missing={sum(1 for case in rule['case_matrix'] if case['status'] == 'MISSING')}"
+        )
         if rule["layer_summary"]:
             for layer, item in rule["layer_summary"].items():
                 lines.append(
                     f"  layer[{layer}]: tests={item['tests']} omitted={item['omitted']}"
                 )
         for issue in rule["issues"]:
-            lines.append(f"  issue[{issue['code']}]: {issue['message']}")
+            lines.append(
+                f"  issue[{_issue_severity(issue['code'])}/{issue['code']}]: {issue['message']}"
+            )
     for issue in report["issues"]:
         if issue["code"] in {
             "UNMAPPED_IMPLEMENTATION_ID",
@@ -1085,6 +1201,7 @@ def _format_markdown_report(report: dict[str, Any]) -> str:
         f"- Passed Rules: `{summary['passed_rules']}`",
         f"- Failed Rules: `{summary['failed_rules']}`",
         f"- Total Issues: `{summary['total_issues']}`",
+        f"- Omitted Accepted Cases: `{summary['total_omitted_accepted_cases']}`",
     ]
 
     if report["implementation_paths"]:
@@ -1095,9 +1212,16 @@ def _format_markdown_report(report: dict[str, Any]) -> str:
         lines.append(f"- Test Paths: {joined}")
 
     lines.extend(["", "## Issue Counts", ""])
+    lines.append("| Severity | Count |")
+    lines.append("| --- | --- |")
+    for severity, count in report["issue_counts_by_severity"].items():
+        lines.append(f"| `{severity}` | `{count}` |")
+    lines.append("")
+    lines.append("### By Code")
+    lines.append("")
     if report["issue_counts"]:
         for code, count in report["issue_counts"].items():
-            lines.append(f"- `{code}`: {count}")
+            lines.append(f"- `{_issue_severity(code)}` `{code}`: {count}")
     else:
         lines.append("- None")
 
@@ -1118,7 +1242,9 @@ def _format_markdown_report(report: dict[str, Any]) -> str:
             f"{len(rule['implementation_refs'])}/{rule['minimum_implementation_refs']}"
         )
         observed = sum(
-            1 for case in rule["case_matrix"] if case["status"] in {"PASS", "OMITTED"}
+            1
+            for case in rule["case_matrix"]
+            if case["status"] in {"PASS", "OMITTED-ACCEPTED"}
         )
         total = len(rule["case_matrix"])
         coverage = _to_percent(rule["coverage"]["traceability_coverage"])
@@ -1141,6 +1267,13 @@ def _format_markdown_report(report: dict[str, Any]) -> str:
             f"Test Cases `{_to_percent(rule['coverage']['test_case_coverage'])}%`, "
             f"Test Layers `{_to_percent(rule['coverage']['test_layer_coverage'])}%`, "
             f"Traceability `{_to_percent(rule['coverage']['traceability_coverage'])}%`"
+        )
+        lines.append(
+            "- Case Counts: "
+            f"PASS `{sum(1 for case in rule['case_matrix'] if case['status'] == 'PASS')}`, "
+            f"OMITTED-ACCEPTED `{sum(1 for case in rule['case_matrix'] if case['status'] == 'OMITTED-ACCEPTED')}`, "
+            f"INVALID `{sum(1 for case in rule['case_matrix'] if case['status'] == 'INVALID')}`, "
+            f"MISSING `{sum(1 for case in rule['case_matrix'] if case['status'] == 'MISSING')}`"
         )
         if rule["required_test_layers"]:
             lines.append(
@@ -1176,6 +1309,9 @@ def _format_markdown_report(report: dict[str, Any]) -> str:
             if case["omitted"]:
                 omitted_values = ", ".join(f"`{item['value']}`" for item in case["omitted"])
                 evidence_parts.append(f"Omitted: {omitted_values}")
+            if case["invalid"]:
+                invalid_values = ", ".join(f"`{item['value']}`" for item in case["invalid"])
+                evidence_parts.append(f"Invalid: {invalid_values}")
             evidence = "; ".join(evidence_parts) if evidence_parts else "Missing"
             lines.append(f"| `{case['suffix']}` | `{case['status']}` | {evidence} |")
 
@@ -1195,6 +1331,11 @@ def _format_markdown_report(report: dict[str, Any]) -> str:
                         )
                         if omitted["reason"]:
                             lines.append(f"      - Reason: {omitted['reason']}")
+                if case["invalid"]:
+                    for invalid in case["invalid"]:
+                        lines.append(
+                            f"    - Invalid `{invalid['value']}` at `{invalid['source_path']}:{invalid['line_number']}`"
+                        )
         else:
             lines.append("- Observed Test Cases: None")
 
@@ -1205,40 +1346,54 @@ def _format_markdown_report(report: dict[str, Any]) -> str:
         else:
             lines.append("- Missing Test Cases: None")
 
+        if rule["invalid_cases"]:
+            lines.append("- Invalid Test Cases:")
+            for item in rule["invalid_cases"]:
+                lines.append(f"  - `{item['suffix']}`")
+        else:
+            lines.append("- Invalid Test Cases: None")
+
         if rule["issues"]:
             lines.append("- Rule Issues:")
             for issue in rule["issues"]:
-                lines.append(f"  - `{issue['code']}`: {issue['message']}")
+                lines.append(
+                    f"  - `{_issue_severity(issue['code'])}` `{issue['code']}`: {issue['message']}"
+                )
         else:
             lines.append("- Rule Issues: None")
         lines.append("")
 
     lines.extend(["## Global Issues", ""])
-    global_issues = [
-        issue
-        for issue in report["issues"]
-        if issue["code"]
-        in {
-            "UNMAPPED_IMPLEMENTATION_ID",
-            "UNMAPPED_TEST_ID",
-            "DUPLICATE_TEST_ID",
-            "INVALID_IMPLEMENTATION_COMMENT_FORMAT",
-            "INVALID_TEST_COMMENT_FORMAT",
-            "INVALID_RELATED_RULES_COMMENT_FORMAT",
-            "UNKNOWN_RELATED_RULE_ID",
-            "MISSING_REVERSE_RULE_RELATION_CONFIG",
-        }
-    ]
-    if global_issues:
-        for issue in global_issues:
-            lines.append(f"- `{issue['code']}`: {issue['message']}")
-            if "annotation" in issue:
-                item = issue["annotation"]
-                lines.append(f"  - `{item['value']}` at `{item['source_path']}:{item['line_number']}`")
-            if "test_id" in issue:
-                lines.append(f"  - Test ID: `{issue['test_id']}`")
-    else:
-        lines.append("- None")
+    global_issue_codes = {
+        "UNMAPPED_IMPLEMENTATION_ID",
+        "UNMAPPED_TEST_ID",
+        "DUPLICATE_TEST_ID",
+        "INVALID_IMPLEMENTATION_COMMENT_FORMAT",
+        "INVALID_TEST_COMMENT_FORMAT",
+        "INVALID_RELATED_RULES_COMMENT_FORMAT",
+        "UNKNOWN_RELATED_RULE_ID",
+        "MISSING_REVERSE_RULE_RELATION_CONFIG",
+    }
+    global_issues = [issue for issue in report["issues"] if issue["code"] in global_issue_codes]
+    for severity in ("ERROR", "WARNING", "INFO"):
+        severity_issues = [
+            issue for issue in global_issues if _issue_severity(issue["code"]) == severity
+        ]
+        lines.append(f"### {severity}")
+        lines.append("")
+        if severity_issues:
+            for issue in severity_issues:
+                lines.append(f"- `{issue['code']}`: {issue['message']}")
+                if "annotation" in issue:
+                    item = issue["annotation"]
+                    lines.append(
+                        f"  - `{item['value']}` at `{item['source_path']}:{item['line_number']}`"
+                    )
+                if "test_id" in issue:
+                    lines.append(f"  - Test ID: `{issue['test_id']}`")
+        else:
+            lines.append("- None")
+        lines.append("")
 
     return "\n".join(lines) + "\n"
 
