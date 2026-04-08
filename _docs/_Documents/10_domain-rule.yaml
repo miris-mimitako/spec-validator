@@ -1,0 +1,121 @@
+version: 1
+id: domain-rules
+status: draft
+
+purpose: >
+  ドメイン仕様を、実装およびテストへ静的にトレース可能な形で定義する。
+  各ルールは一意な rule_id を持ち、実装注釈およびテスト注釈の起点になる。
+
+naming:
+  rule_id_pattern: "^domain-rule-[0-9]{3}$"
+  implementation_id_pattern: "^domain-rule-[0-9]{3}-impl$"
+  note: >
+    実装側では rule_id に対して -impl を付与して表現する。
+    例: domain-rule-001-impl
+
+document_rules:
+  required_top_level_fields:
+    - version
+    - id
+    - status
+    - domains
+  domain_required_fields:
+    - domain
+    - description
+    - rules
+  rule_required_fields:
+    - rule_id
+    - name
+    - summary
+    - rule_type
+    - target
+    - specification
+    - test_rule_refs
+    - implementation
+    - traceability
+  rule_type_values:
+    - boundary
+    - format
+    - required
+    - state_transition
+    - uniqueness
+    - authorization
+    - calculation
+    - custom
+
+domains:
+  - domain: user
+    description: User aggregate and related value objects
+    rules:
+      - rule_id: domain-rule-001
+        name: user-id-length
+        summary: user-id must be between 3 and 10 characters inclusive
+        rule_type: boundary
+        target:
+          bounded_context: identity
+          aggregate: User
+          field: userId
+          data_type: string
+        specification:
+          natural_language:
+            - user-id must be 3 characters or longer
+            - user-id must be 10 characters or shorter
+          machine_constraints:
+            min_length: 3
+            max_length: 10
+            inclusive_min: true
+            inclusive_max: true
+        test_rule_refs:
+          - both-boundary
+        implementation:
+          required: true
+          implementation_id: domain-rule-001-impl
+          expected_locations:
+            - src/domain/user/user-id.ts
+            - src/application/user/create-user.use-case.ts
+        traceability:
+          required_test_patterns:
+            - both-boundary
+          minimum_implementation_refs: 1
+          minimum_test_refs: 4
+        notes:
+          - boundary tests are expected at min-1, min, max, max+1 when technically possible
+
+      - rule_id: domain-rule-002
+        name: user-id-required
+        summary: user-id must be present
+        rule_type: required
+        target:
+          bounded_context: identity
+          aggregate: User
+          field: userId
+          data_type: string
+        specification:
+          natural_language:
+            - user-id must not be null
+            - user-id must not be empty
+          machine_constraints:
+            not_null: true
+            not_empty: true
+            trim_required: true
+        test_rule_refs:
+          - required-basic
+        implementation:
+          required: true
+          implementation_id: domain-rule-002-impl
+          expected_locations:
+            - src/domain/user/user-id.ts
+        traceability:
+          required_test_patterns:
+            - required-basic
+          minimum_implementation_refs: 1
+          minimum_test_refs: 3
+
+validation_examples:
+  valid_implementation_annotations:
+    - domain-rule-001-impl
+    - domain-rule-002-impl
+  invalid_implementation_annotations:
+    - domain-rule-1-impl
+    - domain-rule-001-implementation
+    - user-rule-001-impl

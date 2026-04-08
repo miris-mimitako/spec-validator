@@ -1,0 +1,132 @@
+version: 1
+id: test-rules
+status: draft
+
+purpose: >
+  ドメインルールに対して必要なテストIDの生成規則を定義する。
+  テストコメントに埋め込まれる test_id の形式、および OMITTED の表現規則をここで管理する。
+
+naming:
+  base_test_id_pattern: "^domain-rule-[0-9]{3}-[A-Z-]+-[0-9]{3}$"
+  omitted_test_id_pattern: "^domain-rule-[0-9]{3}-[A-Z-]+-OMITTED$"
+  comment_examples:
+    implementation:
+      - "domain-rule-001-impl"
+    test:
+      - "domain-rule-001-LOWER-OUT-001"
+      - "domain-rule-001-UPPER-IN-001"
+    omitted:
+      - "domain-rule-001-LOWER-OUT-OMITTED Reason: input type does not allow values below zero"
+
+document_rules:
+  required_top_level_fields:
+    - version
+    - id
+    - status
+    - test_patterns
+    - omitted_rule
+  test_pattern_required_fields:
+    - pattern_id
+    - description
+    - applies_to_rule_types
+    - generated_cases
+    - minimum_cases
+    - semantics
+  generated_case_required_fields:
+    - suffix
+    - sequence_required
+    - description
+
+test_patterns:
+  - pattern_id: both-boundary
+    description: >
+      Use when a rule has both lower and upper boundaries and both sides must be verified.
+    applies_to_rule_types:
+      - boundary
+    generated_cases:
+      - suffix: LOWER-OUT
+        sequence_required: true
+        description: value just outside the lower boundary
+      - suffix: LOWER-IN
+        sequence_required: true
+        description: value exactly on the lower boundary
+      - suffix: UPPER-IN
+        sequence_required: true
+        description: value exactly on the upper boundary
+      - suffix: UPPER-OUT
+        sequence_required: true
+        description: value just outside the upper boundary
+    minimum_cases: 4
+    semantics:
+      case_id_examples:
+        - domain-rule-001-LOWER-OUT-001
+        - domain-rule-001-LOWER-IN-001
+        - domain-rule-001-UPPER-IN-001
+        - domain-rule-001-UPPER-OUT-001
+      note: >
+        Each suffix must exist at least once unless omitted with an explicit OMITTED annotation.
+
+  - pattern_id: required-basic
+    description: >
+      Use when a field is required and must reject missing or empty inputs.
+    applies_to_rule_types:
+      - required
+    generated_cases:
+      - suffix: NULL-OUT
+        sequence_required: true
+        description: null input must be rejected
+      - suffix: EMPTY-OUT
+        sequence_required: true
+        description: empty input must be rejected
+      - suffix: VALID-IN
+        sequence_required: true
+        description: valid input must be accepted
+    minimum_cases: 3
+    semantics:
+      case_id_examples:
+        - domain-rule-002-NULL-OUT-001
+        - domain-rule-002-EMPTY-OUT-001
+        - domain-rule-002-VALID-IN-001
+
+omitted_rule:
+  allowed: true
+  required_pattern: "^domain-rule-[0-9]{3}-[A-Z-]+-OMITTED\\s+Reason:\\s+.+$"
+  semantics: >
+    Use OMITTED only when the test case is conceptually required by the pattern
+    but cannot be executed in the current implementation or type system.
+  counting_rule:
+    omitted_satisfies_required_case: true
+    omitted_requires_reason: true
+  examples:
+    valid:
+      - domain-rule-001-LOWER-OUT-OMITTED Reason: unsigned integer cannot represent values below zero
+      - domain-rule-001-UPPER-OUT-OMITTED Reason: external API schema rejects larger values before domain validation
+    invalid:
+      - domain-rule-001-LOWER-OUT-OMITTED
+      - domain-rule-001-LOWER-OUT-001 OMITTED
+      - domain-rule-001-LOWER-OUT-OMITTED reason none
+
+traceability_rules:
+  implementation_annotation:
+    required_pattern: "^domain-rule-[0-9]{3}-impl$"
+    minimum_refs_per_rule: 1
+  test_annotation:
+    sequence_number_pattern: "^[0-9]{3}$"
+    unique_within_rule_and_suffix: true
+    minimum_refs_per_generated_case: 1
+  report_expectations:
+    include_missing_implementation_refs: true
+    include_missing_test_cases: true
+    include_omitted_cases: true
+    include_unmapped_test_ids: true
+
+validation_examples:
+  expected_generated_ids_for_domain_rule_001:
+    - domain-rule-001-LOWER-OUT-001
+    - domain-rule-001-LOWER-IN-001
+    - domain-rule-001-UPPER-IN-001
+    - domain-rule-001-UPPER-OUT-001
+  expected_generated_ids_for_domain_rule_002:
+    - domain-rule-002-NULL-OUT-001
+    - domain-rule-002-EMPTY-OUT-001
+    - domain-rule-002-VALID-IN-001

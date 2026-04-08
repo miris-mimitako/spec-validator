@@ -4,6 +4,7 @@ import argparse
 import json
 import re
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -63,6 +64,200 @@ def _extract_typescript_identifiers(path: Path) -> list[tuple[str, str]]:
         for match in pattern.finditer(text):
             matches.append((kind, match.group(1)))
     return matches
+
+
+def _make_report_payload(
+    results: list[dict[str, Any]],
+    *,
+    scanned_path: str | None,
+    input_names: list[str],
+) -> dict[str, Any]:
+    file_results = [result for result in results if result.get("source_type") == "file"]
+    declaration_results = [result for result in results if result.get("source_type") != "file"]
+
+    if file_results:
+        report_units = file_results
+        report_scope = "file"
+    else:
+        report_units = results
+        report_scope = "item"
+
+    passed = [result for result in report_units if result["valid"]]
+    failed = [result for result in report_units if not result["valid"]]
+
+    error_counts: dict[str, int] = {}
+    for result in failed:
+        for error in result["errors"]:
+            code = error["code"]
+            error_counts[code] = error_counts.get(code, 0) + 1
+
+    files: list[dict[str, Any]] = []
+    if file_results:
+        declarations_by_path: dict[str, list[dict[str, Any]]] = {}
+        for declaration in declaration_results:
+            declarations_by_path.setdefault(declaration["source_path"], []).append(declaration)
+
+        for file_result in file_results:
+            files.append(
+                {
+                    "path": file_result["source_path"],
+                    "name": file_result["source_name"],
+                    "valid": file_result["valid"],
+                    "errors": file_result["errors"],
+                    "matched_domain_terms": file_result["matched_domain_terms"],
+                    "matched_role_suffixes": file_result["matched_role_suffixes"],
+                    "normalized_name": file_result.get("normalized_name"),
+                    "declarations": declarations_by_path.get(file_result["source_path"], []),
+                }
+            )
+
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "scanned_path": scanned_path,
+        "input_names": input_names,
+        "summary": {
+            "scope": report_scope,
+            "total": len(report_units),
+            "passed": len(passed),
+            "failed": len(failed),
+            "status": "success" if not failed else "failure",
+        },
+        "error_counts": dict(sorted(error_counts.items())),
+        "files": files,
+        "passed": passed,
+        "failed": failed,
+        "declarations": declaration_results,
+    }
+
+
+def _format_markdown_report(report: dict[str, Any]) -> str:
+    summary = report["summary"]
+    lines = [
+        "# Naming Validation Report",
+        "",
+        f"- Generated At: `{report['generated_at']}`",
+        f"- Status: `{summary['status']}`",
+        f"- Scope: `{summary['scope']}`",
+        f"- Total: `{summary['total']}`",
+        f"- Passed: `{summary['passed']}`",
+        f"- Failed: `{summary['failed']}`",
+    ]
+
+    if report["scanned_path"]:
+        lines.append(f"- Scanned Path: `{report['scanned_path']}`")
+    if report["input_names"]:
+        joined = ", ".join(f"`{name}`" for name in report["input_names"])
+        lines.append(f"- Input Names: {joined}")
+
+    lines.extend(["", "## Error Counts", ""])
+    if report["error_counts"]:
+        for code, count in report["error_counts"].items():
+            lines.append(f"- `{code}`: {count}")
+    else:
+        lines.append("- None")
+
+    if report["files"]:
+        lines.extend(["", "## Files", ""])
+        for file_entry in report["files"]:
+            lines.extend(_format_markdown_file_result(file_entry))
+    else:
+        lines.extend(["", "## Passed", ""])
+        if report["passed"]:
+            for result in report["passed"]:
+                lines.extend(_format_markdown_result(result))
+        else:
+            lines.append("- None")
+
+        lines.extend(["", "## Failed", ""])
+        if report["failed"]:
+            for result in report["failed"]:
+                lines.extend(_format_markdown_result(result))
+        else:
+            lines.append("- None")
+
+    return "\n".join(lines) + "\n"
+
+
+def _format_markdown_file_result(file_entry: dict[str, Any]) -> list[str]:
+    lines = [f"### `{file_entry['name']}`", ""]
+    lines.append(f"- Result: `{'OK' if file_entry['valid'] else 'NG'}`")
+    lines.append(f"- Path: `{file_entry['path']}`")
+    if file_entry.get("normalized_name") and file_entry["normalized_name"] != file_entry["name"]:
+        lines.append(f"- Normalized Name: `{file_entry['normalized_name']}`")
+    if file_entry["matched_domain_terms"]:
+        lines.append(
+            f"- Domain Terms: {', '.join(f'`{term}`' for term in file_entry['matched_domain_terms'])}"
+        )
+    if file_entry["matched_role_suffixes"]:
+        lines.append(
+            f"- Role Suffixes: {', '.join(f'`{role}`' for role in file_entry['matched_role_suffixes'])}"
+        )
+    if file_entry["errors"]:
+        lines.append("- File Errors:")
+        for error in file_entry["errors"]:
+            lines.append(f"  - `{error['code']}`: {error['message']}")
+    else:
+        lines.append("- File Errors: None")
+
+    if file_entry["declarations"]:
+        lines.append("- Declarations:")
+        for declaration in file_entry["declarations"]:
+            declaration_status = "OK" if declaration["valid"] else "NG"
+            lines.append(f"  - `{declaration['source_name']}`: `{declaration_status}`")
+            if declaration["matched_domain_terms"]:
+                domain_terms = ", ".join(
+                    f"`{term}`" for term in declaration["matched_domain_terms"]
+                )
+                lines.append(f"    - Domain Terms: {domain_terms}")
+            if declaration["matched_role_suffixes"]:
+                role_terms = ", ".join(
+                    f"`{role}`" for role in declaration["matched_role_suffixes"]
+                )
+                lines.append(f"    - Role Suffixes: {role_terms}")
+            if declaration["errors"]:
+                for error in declaration["errors"]:
+                    lines.append(f"    - `{error['code']}`: {error['message']}")
+    else:
+        lines.append("- Declarations: None")
+
+    lines.append("")
+    return lines
+
+
+def _format_markdown_result(result: dict[str, Any]) -> list[str]:
+    label = result.get("source_name", result["name"])
+    lines = [f"### `{label}`", ""]
+    lines.append(f"- Result: `{'OK' if result['valid'] else 'NG'}`")
+
+    if result.get("source_type") and result.get("source_path"):
+        lines.append(f"- Source: `{result['source_type']}` in `{result['source_path']}`")
+    if result.get("normalized_name") and result["normalized_name"] != label:
+        lines.append(f"- Normalized Name: `{result['normalized_name']}`")
+    if result["matched_domain_terms"]:
+        lines.append(
+            f"- Domain Terms: {', '.join(f'`{term}`' for term in result['matched_domain_terms'])}"
+        )
+    if result["matched_role_suffixes"]:
+        lines.append(
+            f"- Role Suffixes: {', '.join(f'`{role}`' for role in result['matched_role_suffixes'])}"
+        )
+
+    if result["errors"]:
+        lines.append("- Errors:")
+        for error in result["errors"]:
+            lines.append(f"  - `{error['code']}`: {error['message']}")
+
+    lines.append("")
+    return lines
+
+
+def _write_report(report_path: Path, report_format: str, report: dict[str, Any]) -> None:
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    if report_format == "json":
+        content = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
+    else:
+        content = _format_markdown_report(report)
+    report_path.write_text(content, encoding="utf-8")
 
 
 @dataclass(frozen=True)
@@ -327,6 +522,16 @@ def build_parser() -> argparse.ArgumentParser:
         default="json",
         help="Output format.",
     )
+    parser.add_argument(
+        "--report",
+        help="Write a validation report to this file path.",
+    )
+    parser.add_argument(
+        "--report-format",
+        choices=("markdown", "json"),
+        default="markdown",
+        help="Report file format.",
+    )
     return parser
 
 
@@ -364,6 +569,15 @@ def main() -> int:
         results.extend(validator.validate_typescript_path(Path(args.path)))
     if not results:
         parser.error("Provide at least one name or --path.")
+
+    report = _make_report_payload(
+        results,
+        scanned_path=args.path,
+        input_names=args.names,
+    )
+
+    if args.report:
+        _write_report(Path(args.report), args.report_format, report)
 
     if args.format == "text":
         print(_format_text(results))

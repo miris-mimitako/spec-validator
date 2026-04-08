@@ -5,7 +5,13 @@
   "main": "index.js",
   "scripts": {
     "validate:naming:pass": "python .agents/spec-naming-validator/scripts/validate_names.py --path examples/nestjs-pass/src/orders --format text",
-    "validate:naming:fail": "python .agents/spec-naming-validator/scripts/validate_names.py --path examples/nestjs-fail/src/orders --format text"
+    "validate:naming:fail": "python .agents/spec-naming-validator/scripts/validate_names.py --path examples/nestjs-fail/src/orders --format text",
+    "report:naming:pass": "python .agents/spec-naming-validator/scripts/validate_names.py --path examples/nestjs-pass/src/orders --format text --report reports/nestjs-pass-report.md --report-format markdown",
+    "report:naming:fail": "python .agents/spec-naming-validator/scripts/validate_names.py --path examples/nestjs-fail/src/orders --format text --report reports/nestjs-fail-report.md --report-format markdown",
+    "validate:traceability:pass": "python .agents/spec-naming-validator/scripts/validate_traceability.py --implementation-path examples/traceability-pass/src --test-path examples/traceability-pass/test --format text",
+    "validate:traceability:fail": "python .agents/spec-naming-validator/scripts/validate_traceability.py --implementation-path examples/traceability-fail/src --test-path examples/traceability-fail/test --format text",
+    "report:traceability:pass": "python .agents/spec-naming-validator/scripts/validate_traceability.py --implementation-path examples/traceability-pass/src --test-path examples/traceability-pass/test --format text --report reports/traceability-pass-report.md --report-format markdown",
+    "report:traceability:fail": "python .agents/spec-naming-validator/scripts/validate_traceability.py --implementation-path examples/traceability-fail/src --test-path examples/traceability-fail/test --format text --report reports/traceability-fail-report.md --report-format markdown"
   },
   "repository": {
     "type": "git",
@@ -26,6 +32,7 @@
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/node": "^25.5.2",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.2"

@@ -30,6 +30,18 @@ Scan a NestJS directory:
 python .agents/spec-naming-validator/scripts/validate_names.py --path examples/nestjs-pass/src/orders --format text
 ```
 
+Write a Markdown report:
+
+```powershell
+python .agents/spec-naming-validator/scripts/validate_names.py --path examples/nestjs-pass/src/orders --format text --report reports/nestjs-pass-report.md --report-format markdown
+```
+
+Run static traceability validation:
+
+```powershell
+python .agents/spec-naming-validator/scripts/validate_traceability.py --implementation-path examples/traceability-pass/src --test-path examples/traceability-pass/test --format text
+```
+
 Get machine-readable output:
 
 ```powershell
