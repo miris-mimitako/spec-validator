@@ -116,6 +116,101 @@ def _issue_severity(code: str) -> str:
     return ISSUE_SEVERITY.get(code, "INFO")
 
 
+def _translate_severity(severity: str, language: str) -> str:
+    if language == "ja":
+        return {
+            "ERROR": "ERROR",
+            "WARNING": "WARNING",
+            "INFO": "INFO",
+        }.get(severity, severity)
+    return severity
+
+
+def _translate_status(status: str, language: str) -> str:
+    if language == "ja":
+        return {
+            "success": "成功",
+            "failure": "失敗",
+            "OK": "OK",
+            "PARTIAL": "PARTIAL",
+            "NG": "NG",
+            "BLOCKED": "BLOCKED",
+            "PASS": "PASS",
+            "OMITTED-ACCEPTED": "OMITTED-ACCEPTED",
+            "INVALID": "INVALID",
+            "MISSING": "MISSING",
+        }.get(status, status)
+    return status
+
+
+def _translate_result(valid: bool, language: str) -> str:
+    if language == "ja":
+        return "OK" if valid else "NG"
+    return "OK" if valid else "NG"
+
+
+def _issue_message(issue: dict[str, Any], language: str) -> str:
+    if language != "ja":
+        return issue["message"]
+
+    code = issue["code"]
+    return {
+        "MISSING_IMPLEMENTATION_REF": "実装注釈が不足しています。",
+        "INSUFFICIENT_TEST_REFS": "必要なテスト注釈数に達していません。",
+        "MISSING_TEST_CASE": "必須のテスト観点が不足しています。",
+        "MISSING_REQUIRED_TEST_LAYER": "必須のテストレイヤが不足しています。",
+        "MISSING_COMBINATION_DIRECTION": "このルールから関連ルールへの組み合わせ注釈がありません。",
+        "MISSING_REVERSE_COMBINATION_DIRECTION": "関連ルール側からこのルールへの逆方向の組み合わせ注釈がありません。",
+        "MISSING_TRACE_RULES_METADATA": "組み合わせテストに TRACE-RULES メタデータが必要です。",
+        "MISSING_RELATED_RULE_IN_TRACE_RULES": "TRACE-RULES に必須の関連ルールが含まれていません。",
+        "INVALID_TRACE_RULES_METADATA": "TRACE-RULES に主ルール ID が含まれていません。",
+        "UNMAPPED_IMPLEMENTATION_ID": "実装注釈が既知のルールに対応していません。",
+        "UNMAPPED_TEST_ID": "テスト注釈が期待されるテスト観点に対応していません。",
+        "DUPLICATE_TEST_ID": "同じテスト ID が複数回使われています。",
+        "INVALID_IMPLEMENTATION_COMMENT_FORMAT": "実装注釈が規定の TRACE コメント形式ではありません。",
+        "INVALID_TEST_COMMENT_FORMAT": "テスト注釈が規定の TRACE コメント形式ではありません。",
+        "INVALID_RELATED_RULES_COMMENT_FORMAT": "TRACE-RULES 注釈が規定のコメント形式ではありません。",
+        "UNKNOWN_RELATED_RULE_ID": "関連ルール ID が domain rules に存在しません。",
+        "MISSING_REVERSE_RULE_RELATION_CONFIG": "関連ルール設定が双方向になっていません。",
+    }.get(code, issue["message"])
+
+
+def _rule_summary_for_language(rule: dict[str, Any], language: str) -> str:
+    if language != "ja":
+        return rule["summary_text"]
+
+    observed_count = sum(
+        1
+        for case in rule["case_matrix"]
+        if case["status"] in {"PASS", "OMITTED-ACCEPTED"}
+    )
+    total = len(rule["case_matrix"])
+    parts: list[str] = [f"{rule['rule_id']}: 必須テスト観点 {total} 件中 {observed_count} 件を確認。"]
+    if not rule["implementation_refs"]:
+        parts.append("実装注釈が不足しています。")
+    if rule["missing_cases"]:
+        parts.append(
+            "不足観点: " + ", ".join(item["suffix"] for item in rule["missing_cases"]) + "。"
+        )
+    if rule["invalid_cases"]:
+        parts.append(
+            "不正注釈観点: " + ", ".join(item["suffix"] for item in rule["invalid_cases"]) + "。"
+        )
+    if rule["missing_test_layers"]:
+        parts.append(
+            "不足レイヤ: " + ", ".join(rule["missing_test_layers"]) + "。"
+        )
+    if (
+        not rule["missing_cases"]
+        and not rule["invalid_cases"]
+        and not rule["missing_test_layers"]
+        and rule["implementation_refs"]
+        and not rule["issues"]
+    ):
+        parts = [f"{rule['rule_id']}: 実装注釈と必須テスト観点がすべて揃っています。"]
+    return " ".join(parts)
+
+
 class TraceabilityValidator:
     def __init__(
         self,
@@ -1133,25 +1228,38 @@ class TraceabilityValidator:
         return dict(sorted(summary.items()))
 
 
-def _format_text_report(report: dict[str, Any]) -> str:
-    lines = [
-        f"status: {report['summary']['status']}",
-        f"total_rules: {report['summary']['total_rules']}",
-        f"passed_rules: {report['summary']['passed_rules']}",
-        f"failed_rules: {report['summary']['failed_rules']}",
-        f"total_issues: {report['summary']['total_issues']}",
-        f"omitted_accepted_cases: {report['summary']['total_omitted_accepted_cases']}",
-    ]
+def _format_text_report(report: dict[str, Any], language: str) -> str:
+    if language == "ja":
+        lines = [
+            f"status: {_translate_status(report['summary']['status'], language)}",
+            f"total_rules: {report['summary']['total_rules']}",
+            f"passed_rules: {report['summary']['passed_rules']}",
+            f"failed_rules: {report['summary']['failed_rules']}",
+            f"total_issues: {report['summary']['total_issues']}",
+            f"omitted_accepted_cases: {report['summary']['total_omitted_accepted_cases']}",
+        ]
+    else:
+        lines = [
+            f"status: {report['summary']['status']}",
+            f"total_rules: {report['summary']['total_rules']}",
+            f"passed_rules: {report['summary']['passed_rules']}",
+            f"failed_rules: {report['summary']['failed_rules']}",
+            f"total_issues: {report['summary']['total_issues']}",
+            f"omitted_accepted_cases: {report['summary']['total_omitted_accepted_cases']}",
+        ]
     for severity, count in report["issue_counts_by_severity"].items():
-        lines.append(f"issues[{severity.lower()}]: {count}")
+        label = severity.lower() if language != "ja" else severity.lower()
+        lines.append(f"issues[{label}]: {count}")
     for layer, item in report["layer_summary"].items():
         lines.append(
             f"layer[{layer}]: tests={item['tests']} omitted={item['omitted']} "
             f"rules={item['rules_touched']} coverage={_to_percent(item['rule_coverage'])}%"
         )
     for rule in report["rules"]:
-        lines.append(f"{rule['status']} {rule['rule_id']} {rule['name']}")
-        lines.append(f"  summary: {rule['summary_text']}")
+        lines.append(
+            f"{_translate_status(rule['status'], language)} {rule['rule_id']} {rule['name']}"
+        )
+        lines.append(f"  summary: {_rule_summary_for_language(rule, language)}")
         lines.append(
             "  coverage: "
             f"impl={_to_percent(rule['coverage']['implementation_ref_coverage'])}% "
@@ -1173,7 +1281,7 @@ def _format_text_report(report: dict[str, Any]) -> str:
                 )
         for issue in rule["issues"]:
             lines.append(
-                f"  issue[{_issue_severity(issue['code'])}/{issue['code']}]: {issue['message']}"
+                f"  issue[{_issue_severity(issue['code'])}/{issue['code']}]: {_issue_message(issue, language)}"
             )
     for issue in report["issues"]:
         if issue["code"] in {
@@ -1186,47 +1294,74 @@ def _format_text_report(report: dict[str, Any]) -> str:
             "UNKNOWN_RELATED_RULE_ID",
             "MISSING_REVERSE_RULE_RELATION_CONFIG",
         }:
-            lines.append(f"issue[{issue['code']}]: {issue['message']}")
+            lines.append(f"issue[{issue['code']}]: {_issue_message(issue, language)}")
     return "\n".join(lines)
 
 
-def _format_markdown_report(report: dict[str, Any]) -> str:
+def _format_markdown_report(report: dict[str, Any], language: str) -> str:
     summary = report["summary"]
-    lines = [
-        "# Traceability Validation Report",
-        "",
-        f"- Generated At: `{report['generated_at']}`",
-        f"- Status: `{summary['status']}`",
-        f"- Total Rules: `{summary['total_rules']}`",
-        f"- Passed Rules: `{summary['passed_rules']}`",
-        f"- Failed Rules: `{summary['failed_rules']}`",
-        f"- Total Issues: `{summary['total_issues']}`",
-        f"- Omitted Accepted Cases: `{summary['total_omitted_accepted_cases']}`",
-    ]
+    if language == "ja":
+        lines = [
+            "# トレーサビリティ検証レポート",
+            "",
+            f"- 生成日時: `{report['generated_at']}`",
+            f"- ステータス: `{_translate_status(summary['status'], language)}`",
+            f"- 総ルール数: `{summary['total_rules']}`",
+            f"- 成功ルール数: `{summary['passed_rules']}`",
+            f"- 失敗ルール数: `{summary['failed_rules']}`",
+            f"- 総 Issue 数: `{summary['total_issues']}`",
+            f"- 受理済み OMITTED 数: `{summary['total_omitted_accepted_cases']}`",
+        ]
+    else:
+        lines = [
+            "# Traceability Validation Report",
+            "",
+            f"- Generated At: `{report['generated_at']}`",
+            f"- Status: `{summary['status']}`",
+            f"- Total Rules: `{summary['total_rules']}`",
+            f"- Passed Rules: `{summary['passed_rules']}`",
+            f"- Failed Rules: `{summary['failed_rules']}`",
+            f"- Total Issues: `{summary['total_issues']}`",
+            f"- Omitted Accepted Cases: `{summary['total_omitted_accepted_cases']}`",
+        ]
 
     if report["implementation_paths"]:
         joined = ", ".join(f"`{path}`" for path in report["implementation_paths"])
-        lines.append(f"- Implementation Paths: {joined}")
+        lines.append(f"- {'実装対象パス' if language == 'ja' else 'Implementation Paths'}: {joined}")
     if report["test_paths"]:
         joined = ", ".join(f"`{path}`" for path in report["test_paths"])
-        lines.append(f"- Test Paths: {joined}")
+        lines.append(f"- {'テスト対象パス' if language == 'ja' else 'Test Paths'}: {joined}")
 
-    lines.extend(["", "## Issue Counts", ""])
-    lines.append("| Severity | Count |")
+    lines.extend(["", "## " + ("Issue 集計" if language == "ja" else "Issue Counts"), ""])
+    lines.append("| " + ("重要度" if language == "ja" else "Severity") + " | " + ("件数" if language == "ja" else "Count") + " |")
     lines.append("| --- | --- |")
     for severity, count in report["issue_counts_by_severity"].items():
-        lines.append(f"| `{severity}` | `{count}` |")
+        lines.append(f"| `{_translate_severity(severity, language)}` | `{count}` |")
     lines.append("")
-    lines.append("### By Code")
+    lines.append("### " + ("コード別" if language == "ja" else "By Code"))
     lines.append("")
     if report["issue_counts"]:
         for code, count in report["issue_counts"].items():
-            lines.append(f"- `{_issue_severity(code)}` `{code}`: {count}")
+            lines.append(
+                f"- `{_translate_severity(_issue_severity(code), language)}` `{code}`: {count}"
+            )
     else:
-        lines.append("- None")
+        lines.append("- " + ("なし" if language == "ja" else "None"))
 
-    lines.extend(["", "## Test Layer Summary", ""])
-    lines.append("| Layer | Tests | Omitted | Rules Touched | Rule Coverage |")
+    lines.extend(["", "## " + ("テストレイヤ集計" if language == "ja" else "Test Layer Summary"), ""])
+    lines.append(
+        "| "
+        + ("レイヤ" if language == "ja" else "Layer")
+        + " | "
+        + ("テスト数" if language == "ja" else "Tests")
+        + " | "
+        + ("OMITTED 数" if language == "ja" else "Omitted")
+        + " | "
+        + ("到達ルール数" if language == "ja" else "Rules Touched")
+        + " | "
+        + ("ルール到達率" if language == "ja" else "Rule Coverage")
+        + " |"
+    )
     lines.append("| --- | --- | --- | --- | --- |")
     for layer, item in report["layer_summary"].items():
         lines.append(
@@ -1234,8 +1369,22 @@ def _format_markdown_report(report: dict[str, Any]) -> str:
             f"`{item['rules_touched']}` | `{_to_percent(item['rule_coverage'])}%` |"
         )
 
-    lines.extend(["", "## Traceability Summary", ""])
-    lines.append("| Rule | Status | Implementation | Test Cases | Coverage | Summary |")
+    lines.extend(["", "## " + ("トレーサビリティ要約" if language == "ja" else "Traceability Summary"), ""])
+    lines.append(
+        "| "
+        + ("ルール" if language == "ja" else "Rule")
+        + " | "
+        + ("状態" if language == "ja" else "Status")
+        + " | "
+        + ("実装" if language == "ja" else "Implementation")
+        + " | "
+        + ("テスト観点" if language == "ja" else "Test Cases")
+        + " | "
+        + ("カバレッジ" if language == "ja" else "Coverage")
+        + " | "
+        + ("要約" if language == "ja" else "Summary")
+        + " |"
+    )
     lines.append("| --- | --- | --- | --- | --- | --- |")
     for rule in report["rules"]:
         implementation_status = (
@@ -1249,27 +1398,35 @@ def _format_markdown_report(report: dict[str, Any]) -> str:
         total = len(rule["case_matrix"])
         coverage = _to_percent(rule["coverage"]["traceability_coverage"])
         lines.append(
-            f"| `{rule['rule_id']}` | `{rule['status']}` | `{implementation_status}` | "
-            f"`{observed}/{total}` | `{coverage}%` | {rule['summary_text']} |"
+            f"| `{rule['rule_id']}` | `{_translate_status(rule['status'], language)}` | `{implementation_status}` | "
+            f"`{observed}/{total}` | `{coverage}%` | {_rule_summary_for_language(rule, language)} |"
         )
 
-    lines.extend(["", "## Rules", ""])
+    lines.extend(["", "## " + ("ルール詳細" if language == "ja" else "Rules"), ""])
     for rule in report["rules"]:
         lines.append(f"### `{rule['rule_id']}` {rule['name']}")
         lines.append("")
-        lines.append(f"- Result: `{'OK' if rule['valid'] else 'NG'}`")
-        lines.append(f"- Rule Status: `{rule['status']}`")
-        lines.append(f"- Summary: {rule['summary_text']}")
-        lines.append(f"- Implementation ID: `{rule['implementation_id']}`")
+        lines.append(f"- {'結果' if language == 'ja' else 'Result'}: `{_translate_result(rule['valid'], language)}`")
+        lines.append(f"- {'ルール状態' if language == 'ja' else 'Rule Status'}: `{_translate_status(rule['status'], language)}`")
+        lines.append(f"- {'要約' if language == 'ja' else 'Summary'}: {_rule_summary_for_language(rule, language)}")
+        lines.append(f"- {'実装 ID' if language == 'ja' else 'Implementation ID'}: `{rule['implementation_id']}`")
         lines.append(
-            "- Coverage: "
-            f"Implementation `{_to_percent(rule['coverage']['implementation_ref_coverage'])}%`, "
-            f"Test Cases `{_to_percent(rule['coverage']['test_case_coverage'])}%`, "
-            f"Test Layers `{_to_percent(rule['coverage']['test_layer_coverage'])}%`, "
-            f"Traceability `{_to_percent(rule['coverage']['traceability_coverage'])}%`"
+            f"- {'カバレッジ' if language == 'ja' else 'Coverage'}: "
+            + (
+                f"実装 `{_to_percent(rule['coverage']['implementation_ref_coverage'])}%`, "
+                f"テスト観点 `{_to_percent(rule['coverage']['test_case_coverage'])}%`, "
+                f"テストレイヤ `{_to_percent(rule['coverage']['test_layer_coverage'])}%`, "
+                f"トレーサビリティ `{_to_percent(rule['coverage']['traceability_coverage'])}%`"
+                if language == "ja"
+                else
+                f"Implementation `{_to_percent(rule['coverage']['implementation_ref_coverage'])}%`, "
+                f"Test Cases `{_to_percent(rule['coverage']['test_case_coverage'])}%`, "
+                f"Test Layers `{_to_percent(rule['coverage']['test_layer_coverage'])}%`, "
+                f"Traceability `{_to_percent(rule['coverage']['traceability_coverage'])}%`"
+            )
         )
         lines.append(
-            "- Case Counts: "
+            f"- {'観点別件数' if language == 'ja' else 'Case Counts'}: "
             f"PASS `{sum(1 for case in rule['case_matrix'] if case['status'] == 'PASS')}`, "
             f"OMITTED-ACCEPTED `{sum(1 for case in rule['case_matrix'] if case['status'] == 'OMITTED-ACCEPTED')}`, "
             f"INVALID `{sum(1 for case in rule['case_matrix'] if case['status'] == 'INVALID')}`, "
@@ -1277,28 +1434,32 @@ def _format_markdown_report(report: dict[str, Any]) -> str:
         )
         if rule["required_test_layers"]:
             lines.append(
-                f"- Required Test Layers: {', '.join(f'`{layer}`' for layer in rule['required_test_layers'])}"
+                f"- {'必須テストレイヤ' if language == 'ja' else 'Required Test Layers'}: {', '.join(f'`{layer}`' for layer in rule['required_test_layers'])}"
             )
         if rule["missing_test_layers"]:
             lines.append(
-                f"- Missing Test Layers: {', '.join(f'`{layer}`' for layer in rule['missing_test_layers'])}"
+                f"- {'不足テストレイヤ' if language == 'ja' else 'Missing Test Layers'}: {', '.join(f'`{layer}`' for layer in rule['missing_test_layers'])}"
             )
         if rule["layer_summary"]:
-            lines.append("- Layer Summary:")
+            lines.append(f"- {'レイヤ集計' if language == 'ja' else 'Layer Summary'}:")
             for layer, item in rule["layer_summary"].items():
                 lines.append(
-                    f"  - `{layer}`: tests `{item['tests']}`, omitted `{item['omitted']}`"
+                    (
+                        f"  - `{layer}`: テスト `{item['tests']}`, OMITTED `{item['omitted']}`"
+                        if language == "ja"
+                        else f"  - `{layer}`: tests `{item['tests']}`, omitted `{item['omitted']}`"
+                    )
                 )
         if rule["implementation_refs"]:
-            lines.append("- Implementation Refs:")
+            lines.append(f"- {'実装参照' if language == 'ja' else 'Implementation Refs'}:")
             for item in rule["implementation_refs"]:
                 lines.append(f"  - `{item['value']}` at `{item['source_path']}:{item['line_number']}`")
         else:
-            lines.append("- Implementation Refs: None")
+            lines.append(f"- {'実装参照' if language == 'ja' else 'Implementation Refs'}: {'なし' if language == 'ja' else 'None'}")
 
-        lines.append("- Expected Test Matrix:")
+        lines.append(f"- {'期待テストマトリクス' if language == 'ja' else 'Expected Test Matrix'}:")
         lines.append("")
-        lines.append("| Suffix | Status | Evidence |")
+        lines.append("| " + ("観点" if language == "ja" else "Suffix") + " | " + ("状態" if language == "ja" else "Status") + " | " + ("根拠" if language == "ja" else "Evidence") + " |")
         lines.append("| --- | --- | --- |")
         for case in rule["case_matrix"]:
             evidence_parts: list[str] = []
@@ -1308,62 +1469,82 @@ def _format_markdown_report(report: dict[str, Any]) -> str:
                 )
             if case["omitted"]:
                 omitted_values = ", ".join(f"`{item['value']}`" for item in case["omitted"])
-                evidence_parts.append(f"Omitted: {omitted_values}")
+                evidence_parts.append(
+                    f"{'OMITTED' if language == 'ja' else 'Omitted'}: {omitted_values}"
+                )
             if case["invalid"]:
                 invalid_values = ", ".join(f"`{item['value']}`" for item in case["invalid"])
-                evidence_parts.append(f"Invalid: {invalid_values}")
-            evidence = "; ".join(evidence_parts) if evidence_parts else "Missing"
-            lines.append(f"| `{case['suffix']}` | `{case['status']}` | {evidence} |")
+                evidence_parts.append(
+                    f"{'不正' if language == 'ja' else 'Invalid'}: {invalid_values}"
+                )
+            evidence = "; ".join(evidence_parts) if evidence_parts else ("不足" if language == "ja" else "Missing")
+            lines.append(
+                f"| `{case['suffix']}` | `{_translate_status(case['status'], language)}` | {evidence} |"
+            )
 
         if rule["observed_cases"]:
-            lines.append("- Observed Test Cases:")
+            lines.append(f"- {'確認済みテスト観点' if language == 'ja' else 'Observed Test Cases'}:")
             for case in rule["observed_cases"]:
-                lines.append(f"  - Suffix `{case['suffix']}`")
+                lines.append(f"  - {('観点' if language == 'ja' else 'Suffix')} `{case['suffix']}`")
                 if case["tests"]:
                     for test in case["tests"]:
                         lines.append(
-                            f"    - Test `{test['value']}` at `{test['source_path']}:{test['line_number']}`"
+                            (
+                                f"    - テスト `{test['value']}` at `{test['source_path']}:{test['line_number']}`"
+                                if language == "ja"
+                                else f"    - Test `{test['value']}` at `{test['source_path']}:{test['line_number']}`"
+                            )
                         )
                 if case["omitted"]:
                     for omitted in case["omitted"]:
                         lines.append(
-                            f"    - Omitted `{omitted['value']}` at `{omitted['source_path']}:{omitted['line_number']}`"
+                            (
+                                f"    - OMITTED `{omitted['value']}` at `{omitted['source_path']}:{omitted['line_number']}`"
+                                if language == "ja"
+                                else f"    - Omitted `{omitted['value']}` at `{omitted['source_path']}:{omitted['line_number']}`"
+                            )
                         )
                         if omitted["reason"]:
-                            lines.append(f"      - Reason: {omitted['reason']}")
+                            lines.append(
+                                f"      - {'理由' if language == 'ja' else 'Reason'}: {omitted['reason']}"
+                            )
                 if case["invalid"]:
                     for invalid in case["invalid"]:
                         lines.append(
-                            f"    - Invalid `{invalid['value']}` at `{invalid['source_path']}:{invalid['line_number']}`"
+                            (
+                                f"    - 不正 `{invalid['value']}` at `{invalid['source_path']}:{invalid['line_number']}`"
+                                if language == "ja"
+                                else f"    - Invalid `{invalid['value']}` at `{invalid['source_path']}:{invalid['line_number']}`"
+                            )
                         )
         else:
-            lines.append("- Observed Test Cases: None")
+            lines.append(f"- {'確認済みテスト観点' if language == 'ja' else 'Observed Test Cases'}: {'なし' if language == 'ja' else 'None'}")
 
         if rule["missing_cases"]:
-            lines.append("- Missing Test Cases:")
+            lines.append(f"- {'不足テスト観点' if language == 'ja' else 'Missing Test Cases'}:")
             for item in rule["missing_cases"]:
                 lines.append(f"  - `{item['suffix']}`")
         else:
-            lines.append("- Missing Test Cases: None")
+            lines.append(f"- {'不足テスト観点' if language == 'ja' else 'Missing Test Cases'}: {'なし' if language == 'ja' else 'None'}")
 
         if rule["invalid_cases"]:
-            lines.append("- Invalid Test Cases:")
+            lines.append(f"- {'不正テスト観点' if language == 'ja' else 'Invalid Test Cases'}:")
             for item in rule["invalid_cases"]:
                 lines.append(f"  - `{item['suffix']}`")
         else:
-            lines.append("- Invalid Test Cases: None")
+            lines.append(f"- {'不正テスト観点' if language == 'ja' else 'Invalid Test Cases'}: {'なし' if language == 'ja' else 'None'}")
 
         if rule["issues"]:
-            lines.append("- Rule Issues:")
+            lines.append(f"- {'ルール Issues' if language == 'ja' else 'Rule Issues'}:")
             for issue in rule["issues"]:
                 lines.append(
-                    f"  - `{_issue_severity(issue['code'])}` `{issue['code']}`: {issue['message']}"
+                    f"  - `{_translate_severity(_issue_severity(issue['code']), language)}` `{issue['code']}`: {_issue_message(issue, language)}"
                 )
         else:
-            lines.append("- Rule Issues: None")
+            lines.append(f"- {'ルール Issues' if language == 'ja' else 'Rule Issues'}: {'なし' if language == 'ja' else 'None'}")
         lines.append("")
 
-    lines.extend(["## Global Issues", ""])
+    lines.extend(["## " + ("全体 Issues" if language == "ja" else "Global Issues"), ""])
     global_issue_codes = {
         "UNMAPPED_IMPLEMENTATION_ID",
         "UNMAPPED_TEST_ID",
@@ -1379,31 +1560,33 @@ def _format_markdown_report(report: dict[str, Any]) -> str:
         severity_issues = [
             issue for issue in global_issues if _issue_severity(issue["code"]) == severity
         ]
-        lines.append(f"### {severity}")
+        lines.append(f"### {_translate_severity(severity, language)}")
         lines.append("")
         if severity_issues:
             for issue in severity_issues:
-                lines.append(f"- `{issue['code']}`: {issue['message']}")
+                lines.append(f"- `{issue['code']}`: {_issue_message(issue, language)}")
                 if "annotation" in issue:
                     item = issue["annotation"]
                     lines.append(
                         f"  - `{item['value']}` at `{item['source_path']}:{item['line_number']}`"
                     )
                 if "test_id" in issue:
-                    lines.append(f"  - Test ID: `{issue['test_id']}`")
+                    lines.append(
+                        f"  - {'テスト ID' if language == 'ja' else 'Test ID'}: `{issue['test_id']}`"
+                    )
         else:
-            lines.append("- None")
+            lines.append("- " + ("なし" if language == "ja" else "None"))
         lines.append("")
 
     return "\n".join(lines) + "\n"
 
 
-def _write_report(path: Path, report_format: str, report: dict[str, Any]) -> None:
+def _write_report(path: Path, report_format: str, report: dict[str, Any], language: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if report_format == "json":
         content = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
     else:
-        content = _format_markdown_report(report)
+        content = _format_markdown_report(report, language)
     path.write_text(content, encoding="utf-8")
 
 
@@ -1449,6 +1632,12 @@ def build_parser() -> argparse.ArgumentParser:
         default="markdown",
         help="Report file format.",
     )
+    parser.add_argument(
+        "--language",
+        choices=("ja", "en"),
+        default="ja",
+        help="Output language for text and markdown reports.",
+    )
     return parser
 
 
@@ -1469,10 +1658,10 @@ def main() -> int:
     )
 
     if args.report:
-        _write_report(Path(args.report), args.report_format, report)
+        _write_report(Path(args.report), args.report_format, report, args.language)
 
     if args.format == "text":
-        print(_format_text_report(report))
+        print(_format_text_report(report, args.language))
     else:
         print(json.dumps(report, ensure_ascii=False, indent=2))
 
