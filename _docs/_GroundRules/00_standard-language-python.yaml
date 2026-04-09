@@ -1,0 +1,284 @@
+version: 1
+id: standard-language-python
+status: draft
+
+policy:
+  target_framework: python
+  target_language: python
+  naming_strategy: preserve_python_standard_terms_and_add_missing_ddd_terms
+  description: >
+    Python の標準語彙と DDD 用語を併用する。
+    Python や主要ライブラリの標準的な責務名は保持し、
+    ドメイン語はユビキタス言語として別途登録して機械判定する。
+
+decision_rules:
+  framework_terms:
+    preserve_as_is: true
+    allow_alias: false
+    allow_translation: false
+    note: >
+      Python や主要ライブラリで一般的な責務語は標準語として扱う。
+      例: Service, Repository, Factory, Serializer, Router, Client
+  missing_ddd_terms:
+    add_if_missing: true
+    create_project_standard: true
+    note: >
+      DDD で必要だが Python 標準語にない責務語は project standard として追加する。
+  generic_terms:
+    forbid_generic_primary_name: true
+    note: >
+      汎用語を主語にした命名は禁止する。
+
+term_schema:
+  required_fields:
+    - term
+    - category
+    - layer
+    - source
+    - allowed_targets
+    - aliases
+    - description
+  category_values:
+    - framework
+    - ddd
+    - test
+    - generic_forbidden
+  layer_values:
+    - presentation
+    - application
+    - domain
+    - infrastructure
+    - cross_layer
+    - test
+
+terms:
+  framework:
+    - term: Service
+      category: framework
+      layer: application
+      source: python_standard
+      allowed_targets: [class, file]
+      aliases: []
+      description: application service or service boundary
+    - term: Repository
+      category: framework
+      layer: domain
+      source: python_standard
+      allowed_targets: [class, file]
+      aliases: []
+      description: repository boundary
+    - term: Factory
+      category: framework
+      layer: domain
+      source: python_standard
+      allowed_targets: [class, file]
+      aliases: []
+      description: object creation boundary
+    - term: Serializer
+      category: framework
+      layer: presentation
+      source: python_web
+      allowed_targets: [class, file]
+      aliases: []
+      description: serialization boundary
+    - term: Router
+      category: framework
+      layer: presentation
+      source: python_web
+      allowed_targets: [file]
+      aliases: []
+      description: route registration module
+    - term: Client
+      category: framework
+      layer: infrastructure
+      source: python_standard
+      allowed_targets: [class, file]
+      aliases: []
+      description: external client boundary
+    - term: Handler
+      category: framework
+      layer: application
+      source: python_standard
+      allowed_targets: [class, file]
+      aliases: []
+      description: command or event handling boundary
+    - term: Schema
+      category: framework
+      layer: presentation
+      source: python_standard
+      allowed_targets: [class, file]
+      aliases: []
+      description: input or output schema
+
+  ddd:
+    - term: Entity
+      category: ddd
+      layer: domain
+      source: ddd
+      allowed_targets: [class, file]
+      aliases: []
+      description: domain entity
+    - term: ValueObject
+      category: ddd
+      layer: domain
+      source: ddd
+      allowed_targets: [class, file]
+      aliases: [VO]
+      description: domain value object
+    - term: Aggregate
+      category: ddd
+      layer: domain
+      source: ddd
+      allowed_targets: [class, file]
+      aliases: []
+      description: aggregate root or aggregate boundary
+    - term: DomainService
+      category: ddd
+      layer: domain
+      source: ddd
+      allowed_targets: [class, file]
+      aliases: []
+      description: domain service
+    - term: UseCase
+      category: ddd
+      layer: application
+      source: project_standard
+      allowed_targets: [class, file]
+      aliases: []
+      description: application use case boundary
+    - term: Policy
+      category: ddd
+      layer: domain
+      source: project_standard
+      allowed_targets: [class, file]
+      aliases: []
+      description: business policy object
+    - term: Specification
+      category: ddd
+      layer: domain
+      source: ddd
+      allowed_targets: [class, file]
+      aliases: []
+      description: business rule specification
+    - term: DTO
+      category: ddd
+      layer: application
+      source: project_standard
+      allowed_targets: [class, file]
+      aliases: [Dto]
+      description: data transfer object
+
+  test:
+    - term: Test
+      category: test
+      layer: test
+      source: testing
+      allowed_targets: [class, file]
+      aliases: []
+      description: test subject suffix
+    - term: Fixture
+      category: test
+      layer: test
+      source: testing
+      allowed_targets: [class, file]
+      aliases: []
+      description: test fixture
+    - term: Stub
+      category: test
+      layer: test
+      source: testing
+      allowed_targets: [class, file]
+      aliases: []
+      description: test stub
+    - term: Mock
+      category: test
+      layer: test
+      source: testing
+      allowed_targets: [class, file]
+      aliases: []
+      description: test mock
+    - term: Fake
+      category: test
+      layer: test
+      source: testing
+      allowed_targets: [class, file]
+      aliases: []
+      description: test fake
+    - term: Spy
+      category: test
+      layer: test
+      source: testing
+      allowed_targets: [class, file]
+      aliases: []
+      description: test spy
+
+  generic_forbidden:
+    - term: Manager
+      category: generic_forbidden
+      layer: cross_layer
+      source: project_rule
+      allowed_targets: []
+      aliases: []
+      description: forbidden generic role name
+    - term: Helper
+      category: generic_forbidden
+      layer: cross_layer
+      source: project_rule
+      allowed_targets: []
+      aliases: []
+      description: forbidden generic role name
+    - term: Util
+      category: generic_forbidden
+      layer: cross_layer
+      source: project_rule
+      allowed_targets: []
+      aliases: [Utils]
+      description: forbidden generic role name
+    - term: Common
+      category: generic_forbidden
+      layer: cross_layer
+      source: project_rule
+      allowed_targets: []
+      aliases: []
+      description: forbidden generic role name
+    - term: Info
+      category: generic_forbidden
+      layer: cross_layer
+      source: project_rule
+      allowed_targets: []
+      aliases: []
+      description: forbidden generic role name
+    - term: Data
+      category: generic_forbidden
+      layer: cross_layer
+      source: project_rule
+      allowed_targets: []
+      aliases: []
+      description: forbidden generic role name
+    - term: Base
+      category: generic_forbidden
+      layer: cross_layer
+      source: project_rule
+      allowed_targets: []
+      aliases: []
+      description: forbidden generic role name
+    - term: Impl
+      category: generic_forbidden
+      layer: cross_layer
+      source: project_rule
+      allowed_targets: []
+      aliases: []
+      description: forbidden generic role name
+
+validation_hints:
+  class_name_case: PascalCase
+  function_name_case: snake_case
+  file_name_case: snake_case
+  domain_term_must_exist_in_dictionary: true
+  framework_term_must_be_from_registered_list: true
+  forbidden_term_match_mode: exact_token
+  aliases_allowed_only_when_registered: true
+
+future_files:
+  domain_dictionary: _docs/_GroundRules/01_domain-terms.yaml
+  naming_exceptions: _docs/_GroundRules/90_naming-exceptions.yaml

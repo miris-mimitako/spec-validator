@@ -1,0 +1,112 @@
+version: 1
+id: architecture-layer-rules
+status: draft
+
+purpose: >
+  レイヤ間に対する構造ルールを定義する。
+  特に layer をまたぐ依存は DIP を前提とし、
+  利用側レイヤに interface を配置し、
+  外部から依存注入されることを静的に検証する。
+
+policy:
+  target_language: csharp
+  architecture_style: layered_with_consumer_owned_ports
+  core_principles:
+    - cross_layer_dependency_requires_dip
+    - consumer_side_interface_required
+    - external_dependency_injection_required
+  layer_dependency_policy:
+    domain:
+      allowed_layers: []
+    application:
+      allowed_layers:
+        - domain
+    infrastructure:
+      allowed_layers:
+        - domain
+        - application
+    presentation:
+      allowed_layers:
+        - application
+        - domain
+    composition_root:
+      allowed_layers:
+        - domain
+        - application
+        - infrastructure
+        - presentation
+
+layers:
+  - layer_id: domain
+    path_patterns:
+      - "[\\\\/]Domain[\\\\/]"
+  - layer_id: application
+    path_patterns:
+      - "[\\\\/]Application[\\\\/]"
+  - layer_id: infrastructure
+    path_patterns:
+      - "[\\\\/]Infrastructure[\\\\/]"
+  - layer_id: presentation
+    path_patterns:
+      - "[\\\\/]Presentation[\\\\/]"
+      - "[\\\\/]Controllers[\\\\/]"
+  - layer_id: composition_root
+    path_patterns:
+      - "[\\\\/]Bootstrap[\\\\/]"
+      - "[\\\\/]CompositionRoot[\\\\/]"
+      - "[\\\\/]DependencyInjection[\\\\/]"
+      - "[\\\\/]Program\\.cs$"
+      - "[\\\\/]Startup\\.cs$"
+
+rules:
+  - rule_id: ARCH-001
+    name: cross-layer-concrete-dependency-forbidden
+    severity: error
+    description: >
+      layer をまたぐ依存で concrete class を直接参照してはならない。
+      必ず interface 契約で constructor injection する。
+  - rule_id: ARCH-002
+    name: consumer-owned-interface-required
+    severity: error
+    description: >
+      cross-layer dependency に使う interface は利用する側レイヤに配置する。
+      提供側レイヤに interface を置いて利用側が依存してはならない。
+  - rule_id: ARCH-003
+    name: manual-cross-layer-instantiation-forbidden
+    severity: error
+    description: >
+      cross-layer dependency を new で直接生成してはならない。
+      外部から依存注入される必要がある。
+  - rule_id: ARCH-004
+    name: external-di-registration-required
+    severity: warning
+    description: >
+      利用側 interface と提供側 implementation の対応は composition root で登録されなければならない。
+      AddScoped, AddTransient, AddSingleton などの外部 DI 登録を検出する。
+  - rule_id: ARCH-005
+    name: forbidden-layer-dependency
+    severity: error
+    description: >
+      layer 間の依存は policy.layer_dependency_policy で定義された方向だけを許可する。
+      許可されていない層への参照や逆方向参照は禁止する。
+
+detection:
+  interface_name_pattern: "^I[A-Z][A-Za-z0-9_]+$"
+  constructor_injection:
+    enabled: true
+    detect_constructor_parameters: true
+  manual_instantiation:
+    enabled: true
+    pattern: "\\bnew\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*\\("
+  external_di_registration:
+    enabled: true
+    patterns:
+      - "AddScoped\\s*<\\s*(?P<interface>[A-Za-z_][A-Za-z0-9_]*)\\s*,\\s*(?P<implementation>[A-Za-z_][A-Za-z0-9_]*)\\s*>"
+      - "AddTransient\\s*<\\s*(?P<interface>[A-Za-z_][A-Za-z0-9_]*)\\s*,\\s*(?P<implementation>[A-Za-z_][A-Za-z0-9_]*)\\s*>"
+      - "AddSingleton\\s*<\\s*(?P<interface>[A-Za-z_][A-Za-z0-9_]*)\\s*,\\s*(?P<implementation>[A-Za-z_][A-Za-z0-9_]*)\\s*>"
+
+reporting:
+  include_layers: true
+  include_contract_owner: true
+  include_missing_registrations: true
+  include_manual_instantiations: true

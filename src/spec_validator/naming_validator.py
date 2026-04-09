@@ -14,6 +14,8 @@ import yaml
 ROOT_DIR = Path(__file__).resolve().parents[2]
 GROUND_RULES_DIR = ROOT_DIR / "_docs" / "_GroundRules"
 STANDARD_LANGUAGE_FILE = GROUND_RULES_DIR / "00_standard-language-ddd.yaml"
+PYTHON_STANDARD_LANGUAGE_FILE = GROUND_RULES_DIR / "00_standard-language-python.yaml"
+CSHARP_STANDARD_LANGUAGE_FILE = GROUND_RULES_DIR / "00_standard-language-csharp.yaml"
 DOMAIN_TERMS_FILE = GROUND_RULES_DIR / "01_domain-terms.yaml"
 
 
@@ -59,6 +61,48 @@ def _extract_typescript_identifiers(path: Path) -> list[tuple[str, str]]:
         ("type", re.compile(r"\bexport\s+type\s+([A-Za-z_][A-Za-z0-9_]*)")),
         ("enum", re.compile(r"\bexport\s+enum\s+([A-Za-z_][A-Za-z0-9_]*)")),
         ("function", re.compile(r"\bexport\s+function\s+([A-Za-z_][A-Za-z0-9_]*)")),
+    ]
+    for kind, pattern in patterns:
+        for match in pattern.finditer(text):
+            matches.append((kind, match.group(1)))
+    return matches
+
+
+def _extract_python_identifiers(path: Path) -> list[tuple[str, str]]:
+    text = path.read_text(encoding="utf-8")
+    matches: list[tuple[str, str]] = []
+    patterns = [
+        ("class", re.compile(r"^\s*class\s+([A-Za-z_][A-Za-z0-9_]*)\b", re.MULTILINE)),
+        ("function", re.compile(r"^\s*def\s+([A-Za-z_][A-Za-z0-9_]*)\b", re.MULTILINE)),
+    ]
+    for kind, pattern in patterns:
+        for match in pattern.finditer(text):
+            matches.append((kind, match.group(1)))
+    return matches
+
+
+def _extract_csharp_identifiers(path: Path) -> list[tuple[str, str]]:
+    text = path.read_text(encoding="utf-8")
+    matches: list[tuple[str, str]] = []
+    patterns = [
+        (
+            "class",
+            re.compile(
+                r"\b(?:public|internal|private|protected)?\s*(?:sealed\s+|abstract\s+|partial\s+)*class\s+([A-Za-z_][A-Za-z0-9_]*)"
+            ),
+        ),
+        (
+            "interface",
+            re.compile(
+                r"\b(?:public|internal|private|protected)?\s*interface\s+([A-Za-z_][A-Za-z0-9_]*)"
+            ),
+        ),
+        (
+            "record",
+            re.compile(
+                r"\b(?:public|internal|private|protected)?\s*(?:sealed\s+|partial\s+)*record\s+([A-Za-z_][A-Za-z0-9_]*)"
+            ),
+        ),
     ]
     for kind, pattern in patterns:
         for match in pattern.finditer(text):
@@ -441,32 +485,43 @@ class NamingValidator:
         result["normalized_name"] = normalized
         return result
 
-    def validate_typescript_path(self, path: Path) -> list[dict[str, Any]]:
+    def validate_path(self, path: Path) -> list[dict[str, Any]]:
         if path.is_file():
-            ts_files = [path]
+            source_files = [path]
         else:
-            ts_files = sorted(
+            source_files = sorted(
                 candidate
-                for candidate in path.rglob("*.ts")
-                if "node_modules" not in candidate.parts
+                for candidate in path.rglob("*")
+                if candidate.is_file()
+                and "node_modules" not in candidate.parts
+                and candidate.suffix in {".ts", ".py", ".cs"}
             )
 
         results: list[dict[str, Any]] = []
-        for ts_file in ts_files:
-            file_result = self.validate_identifier(_normalize_file_stem(ts_file))
+        for source_file in source_files:
+            file_result = self.validate_identifier(_normalize_file_stem(source_file))
             file_result["source_type"] = "file"
-            file_result["source_path"] = str(ts_file)
-            file_result["source_name"] = ts_file.name
+            file_result["source_path"] = str(source_file)
+            file_result["source_name"] = source_file.name
             results.append(file_result)
 
-            for declaration_kind, declaration_name in _extract_typescript_identifiers(ts_file):
+            for declaration_kind, declaration_name in self._extract_identifiers(source_file):
                 declaration_result = self.validate_identifier(declaration_name)
                 declaration_result["source_type"] = declaration_kind
-                declaration_result["source_path"] = str(ts_file)
+                declaration_result["source_path"] = str(source_file)
                 declaration_result["source_name"] = declaration_name
                 results.append(declaration_result)
 
         return results
+
+    def _extract_identifiers(self, path: Path) -> list[tuple[str, str]]:
+        if path.suffix == ".ts":
+            return _extract_typescript_identifiers(path)
+        if path.suffix == ".py":
+            return _extract_python_identifiers(path)
+        if path.suffix == ".cs":
+            return _extract_csharp_identifiers(path)
+        return []
 
     def _extract_role_suffixes(self, tokens: list[str]) -> tuple[list[str], list[str]]:
         matched_roles: list[str] = []
@@ -504,7 +559,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("names", nargs="*", help="Names to validate.")
     parser.add_argument(
         "--path",
-        help="TypeScript file or directory to scan for file names and exported declarations.",
+        help="Source file or directory to scan for file names and declarations.",
+    )
+    parser.add_argument(
+        "--profile",
+        choices=("nestjs", "python", "csharp"),
+        help="Use a built-in standard language profile.",
     )
     parser.add_argument(
         "--standard-language",
@@ -558,15 +618,23 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
 
+    standard_language_path = Path(args.standard_language)
+    if args.profile == "python":
+        standard_language_path = PYTHON_STANDARD_LANGUAGE_FILE
+    elif args.profile == "csharp":
+        standard_language_path = CSHARP_STANDARD_LANGUAGE_FILE
+    elif args.profile == "nestjs":
+        standard_language_path = STANDARD_LANGUAGE_FILE
+
     validator = NamingValidator(
-        standard_language_path=Path(args.standard_language),
+        standard_language_path=standard_language_path,
         domain_terms_path=Path(args.domain_terms),
     )
     results: list[dict[str, Any]] = []
     if args.names:
         results.extend(validator.validate_identifier(name) for name in args.names)
     if args.path:
-        results.extend(validator.validate_typescript_path(Path(args.path)))
+        results.extend(validator.validate_path(Path(args.path)))
     if not results:
         parser.error("Provide at least one name or --path.")
 

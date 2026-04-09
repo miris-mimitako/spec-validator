@@ -1,0 +1,283 @@
+version: 1
+id: standard-language-csharp
+status: draft
+
+policy:
+  target_framework: csharp
+  target_language: csharp
+  naming_strategy: preserve_csharp_standard_terms_and_add_missing_ddd_terms
+  description: >
+    C# と .NET の標準語彙を保持しつつ、DDD 用語を追加して機械判定する。
+    フレームワーク責務語とドメイン語を分け、ドメイン語は共有辞書で管理する。
+
+decision_rules:
+  framework_terms:
+    preserve_as_is: true
+    allow_alias: false
+    allow_translation: false
+    note: >
+      C# / ASP.NET Core で一般的な責務語は標準語として扱う。
+      例: Service, Repository, Controller, Handler, Validator, Client
+  missing_ddd_terms:
+    add_if_missing: true
+    create_project_standard: true
+    note: >
+      DDD で必要だが .NET 標準語にない責務語は project standard として追加する。
+  generic_terms:
+    forbid_generic_primary_name: true
+    note: >
+      汎用語を主語にした命名は禁止する。
+
+term_schema:
+  required_fields:
+    - term
+    - category
+    - layer
+    - source
+    - allowed_targets
+    - aliases
+    - description
+  category_values:
+    - framework
+    - ddd
+    - test
+    - generic_forbidden
+  layer_values:
+    - presentation
+    - application
+    - domain
+    - infrastructure
+    - cross_layer
+    - test
+
+terms:
+  framework:
+    - term: Service
+      category: framework
+      layer: application
+      source: dotnet_standard
+      allowed_targets: [class, file]
+      aliases: []
+      description: application service boundary
+    - term: Repository
+      category: framework
+      layer: domain
+      source: dotnet_standard
+      allowed_targets: [interface, class, file]
+      aliases: []
+      description: repository boundary
+    - term: Controller
+      category: framework
+      layer: presentation
+      source: aspnet_core
+      allowed_targets: [class, file]
+      aliases: []
+      description: MVC or API controller
+    - term: Handler
+      category: framework
+      layer: application
+      source: dotnet_standard
+      allowed_targets: [class, file]
+      aliases: []
+      description: command or event handler
+    - term: Validator
+      category: framework
+      layer: presentation
+      source: dotnet_standard
+      allowed_targets: [class, file]
+      aliases: []
+      description: validation boundary
+    - term: Client
+      category: framework
+      layer: infrastructure
+      source: dotnet_standard
+      allowed_targets: [class, file]
+      aliases: []
+      description: external client boundary
+    - term: Request
+      category: framework
+      layer: presentation
+      source: dotnet_standard
+      allowed_targets: [class, file]
+      aliases: []
+      description: request DTO
+    - term: Response
+      category: framework
+      layer: presentation
+      source: dotnet_standard
+      allowed_targets: [class, file]
+      aliases: []
+      description: response DTO
+
+  ddd:
+    - term: Entity
+      category: ddd
+      layer: domain
+      source: ddd
+      allowed_targets: [class, file]
+      aliases: []
+      description: domain entity
+    - term: ValueObject
+      category: ddd
+      layer: domain
+      source: ddd
+      allowed_targets: [class, file]
+      aliases: [VO]
+      description: domain value object
+    - term: Aggregate
+      category: ddd
+      layer: domain
+      source: ddd
+      allowed_targets: [class, file]
+      aliases: []
+      description: aggregate root or boundary
+    - term: DomainService
+      category: ddd
+      layer: domain
+      source: ddd
+      allowed_targets: [class, file]
+      aliases: []
+      description: domain service
+    - term: UseCase
+      category: ddd
+      layer: application
+      source: project_standard
+      allowed_targets: [class, file]
+      aliases: []
+      description: application use case boundary
+    - term: Policy
+      category: ddd
+      layer: domain
+      source: project_standard
+      allowed_targets: [class, file]
+      aliases: []
+      description: business policy object
+    - term: Specification
+      category: ddd
+      layer: domain
+      source: ddd
+      allowed_targets: [class, file]
+      aliases: []
+      description: business rule specification
+    - term: DTO
+      category: ddd
+      layer: application
+      source: project_standard
+      allowed_targets: [class, file]
+      aliases: [Dto]
+      description: data transfer object
+
+  test:
+    - term: Test
+      category: test
+      layer: test
+      source: testing
+      allowed_targets: [class, file]
+      aliases: []
+      description: test subject suffix
+    - term: Fixture
+      category: test
+      layer: test
+      source: testing
+      allowed_targets: [class, file]
+      aliases: []
+      description: test fixture
+    - term: Stub
+      category: test
+      layer: test
+      source: testing
+      allowed_targets: [class, file]
+      aliases: []
+      description: test stub
+    - term: Mock
+      category: test
+      layer: test
+      source: testing
+      allowed_targets: [class, file]
+      aliases: []
+      description: test mock
+    - term: Fake
+      category: test
+      layer: test
+      source: testing
+      allowed_targets: [class, file]
+      aliases: []
+      description: test fake
+    - term: Spy
+      category: test
+      layer: test
+      source: testing
+      allowed_targets: [class, file]
+      aliases: []
+      description: test spy
+
+  generic_forbidden:
+    - term: Manager
+      category: generic_forbidden
+      layer: cross_layer
+      source: project_rule
+      allowed_targets: []
+      aliases: []
+      description: forbidden generic role name
+    - term: Helper
+      category: generic_forbidden
+      layer: cross_layer
+      source: project_rule
+      allowed_targets: []
+      aliases: []
+      description: forbidden generic role name
+    - term: Util
+      category: generic_forbidden
+      layer: cross_layer
+      source: project_rule
+      allowed_targets: []
+      aliases: [Utils]
+      description: forbidden generic role name
+    - term: Common
+      category: generic_forbidden
+      layer: cross_layer
+      source: project_rule
+      allowed_targets: []
+      aliases: []
+      description: forbidden generic role name
+    - term: Info
+      category: generic_forbidden
+      layer: cross_layer
+      source: project_rule
+      allowed_targets: []
+      aliases: []
+      description: forbidden generic role name
+    - term: Data
+      category: generic_forbidden
+      layer: cross_layer
+      source: project_rule
+      allowed_targets: []
+      aliases: []
+      description: forbidden generic role name
+    - term: Base
+      category: generic_forbidden
+      layer: cross_layer
+      source: project_rule
+      allowed_targets: []
+      aliases: []
+      description: forbidden generic role name
+    - term: Impl
+      category: generic_forbidden
+      layer: cross_layer
+      source: project_rule
+      allowed_targets: []
+      aliases: []
+      description: forbidden generic role name
+
+validation_hints:
+  class_name_case: PascalCase
+  function_name_case: PascalCase
+  file_name_case: PascalCase
+  domain_term_must_exist_in_dictionary: true
+  framework_term_must_be_from_registered_list: true
+  forbidden_term_match_mode: exact_token
+  aliases_allowed_only_when_registered: true
+
+future_files:
+  domain_dictionary: _docs/_GroundRules/01_domain-terms.yaml
+  naming_exceptions: _docs/_GroundRules/90_naming-exceptions.yaml
