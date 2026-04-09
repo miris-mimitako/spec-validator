@@ -1,0 +1,126 @@
+version: 1
+id: spec-structure
+status: draft
+
+purpose: >
+  `_docs/_Specs` に配置するプロジェクト仕様書の標準構造を定義する。
+  既存 sample の `screens / logics / terms` 形式を受け入れつつ、
+  ファイル内の local id を正規化して一意な canonical id を生成できるようにする。
+
+root:
+  canonical_specs_root: "_docs/_Specs"
+  allowed_domain_directories:
+    - screens
+    - logics
+    - terms
+  optional_domain_directories:
+    - shared
+    - references
+
+document_structure:
+  domain_directory_pattern: "^[a-z0-9_-]+$"
+  file_extensions:
+    - ".yaml"
+    - ".yml"
+  recommended_layout:
+    - "{domain}/screens/*.yaml"
+    - "{domain}/logics/*.yaml"
+    - "{domain}/terms/*.yaml"
+
+document_kinds:
+  screens:
+    description: UI screen specification documents
+    local_id_sections:
+      - Invariants
+      - Rules
+      - Constraints
+  logics:
+    description: use case, flow, orchestration, and business logic specifications
+    local_id_sections:
+      - Rule
+      - Rules
+      - Invariants
+      - Scenarios
+  terms:
+    description: term, value object, action, and domain concept specifications
+    local_id_sections:
+      - Rule
+      - Rules
+
+naming:
+  local_id_patterns:
+    - "^RULE(?:-[A-Z]+)?-[0-9]{3}$"
+    - "^INV(?:ARIANT)?-[0-9]{3}$"
+  canonical_id_format: "{domain}.{kind}.{document_name}.{local_id}"
+  canonical_examples:
+    - "auth.terms.employee_code.RULE-001"
+    - "auth.screens.login.INVARIANT-001"
+    - "auth.screens.login.INV-004"
+  note: >
+    local id は既存仕様書との互換性のため保持する。
+    validator や report は canonical id を主キーとして扱う。
+
+normalization:
+  derive_domain_from_path: true
+  derive_kind_from_parent_directory: true
+  derive_document_name_from_filename: true
+  filename_normalization:
+    strip_extension: true
+    preserve_snake_case: true
+  section_aliases:
+    Rule: Rules
+    Invariant: Invariants
+  reference_resolution:
+    enabled: true
+    supported_fields:
+      - "$ref"
+    relative_ref_base: "current_file"
+    expected_ref_targets:
+      - terms
+      - logics
+      - screens
+
+traceability_mapping:
+  implementation_ref_fields:
+    - implemented_in
+  implementation_ref_required_fields:
+    - path
+    - status
+  allowed_status_values:
+    - implemented
+    - planned
+    - omitted
+  test_path_detection:
+    ut_patterns:
+      - "[\\\\/]spec[\\\\/]"
+      - "[\\\\/]unit[\\\\/]"
+      - "[\\\\/]__tests__[\\\\/]"
+    it_patterns:
+      - "[\\\\/]integration[\\\\/]"
+      - "[\\\\/]it[\\\\/]"
+    e2e_patterns:
+      - "[\\\\/]e2e[\\\\/]"
+
+validation_rules:
+  require_canonical_uniqueness: true
+  require_unique_local_ids_within_file: true
+  require_known_document_kind: true
+  require_ref_target_exists: true
+  require_rule_objects_to_have_id_and_description: true
+  allow_mixed_string_and_object_entries: false
+
+reporting:
+  include_local_id: true
+  include_canonical_id: true
+  include_source_file: true
+  include_ref_resolution: true
+  include_missing_ref_targets: true
+
+migration_policy:
+  samples_directory: "samples"
+  migration_target_directory: "_docs/_Specs"
+  compatibility_mode:
+    enabled: true
+    description: >
+      sample と既存プロジェクト仕様は local id のまま読める。
+      内部では canonical id に変換して traceability の正本とする。

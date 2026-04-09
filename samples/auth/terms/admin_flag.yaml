@@ -1,0 +1,60 @@
+Term: "管理者フラグ (Admin Flag)"
+Definition: "従業員が管理者権限を持つかどうかを示すフラグ。DB の canonical 値は '1' / '0' だが、互換入力として 'true' / 'false' を受ける箇所がある"
+
+DB:
+  $ref: "../../ddl/employee_inf.prisma#employee_inf.admin_flag"
+
+Domain:
+  BoundedContext: Auth
+  Aggregate: Employee
+  ValueObject: AdminFlag
+  DomainEvent: null
+  Rule:
+    - id: "RULE-001"
+      description: "admin_flag は管理者権限の有無を示すフラグであり、UI 表示制御（管理者メニューの出し分け、管理者専用操作ボタンの表示）に使用される非機密情報である。ログインレスポンスから除外してはならない。VER-014 の機密フィールド除外対象には含めないこと"
+      added_by: "bugfix/bugfix_admin_flag_excluded_from_login_response"
+      implemented_in:
+        - path: "hozen_back/src/auth/domain/user-info.ts"
+          line: 29
+          status: "implemented"
+    - id: "RULE-002"
+      description: "FE の EmployeeCookie interface と BE の UserInfoSecure interface のフィールドセットは常に一致させること。BE で除外されたフィールドは FE の型定義からも削除し、saveTokens() のマッピングからも除去すること。型の乖離はサイレントに undefined を Cookie に保存する原因となる"
+      added_by: "bugfix/bugfix_admin_flag_not_in_frontend"
+      implemented_in:
+        - path: "hozen_back/src/auth/domain/user-info.ts"
+          line: 31
+          status: "implemented"
+        - path: "hozen_front/front/src/lib/api/auth.ts"
+          line: 36
+          status: "implemented"
+    - id: "RULE-003"
+      description: "JWT ペイロードには admin_flag を必ず含めること。AdminGuard は JWT 由来の user オブジェクトから adminFlag を取得して管理者判定を行う。DB の m_employee.admin_flag → TokenScopeInfo.adminFlag → JWT payload.adminFlag → JwtStrategy validate() 戻り値.adminFlag → AdminGuard のフローでデータが伝搬すること。"
+      added_by: "bugfix/bugfix_admin_division_403_forbidden"
+      implemented_in:
+        - path: "hozen_back/src/auth/infrastructure/service/jwt-token.service.ts"
+          line: 24
+          status: "implemented"
+        - path: "hozen_back/src/auth/infrastructure/strategy/jwt.strategy.ts"
+          line: 69
+          status: "implemented"
+        - path: "hozen_back/src/auth/guards/admin.guard.ts"
+          line: 11
+          status: "implemented"
+        - path: "hozen_back/test/auth/auth-cookie-flow.e2e-spec.ts"
+          status: "implemented"
+    - id: "RULE-004"
+      description: "adminFlag / admin_flag の truthy 判定では legacy 文字列表現 'true' を後方互換入力として受け入れてよい。ただし canonical な返却値は backend 正規化済みの is_admin（boolean）を正本とし、front は admin_flag 文字列を独自業務解釈してはならない"
+      added_by: "issue-high-risk/#526"
+      implemented_in:
+        - path: "hozen_back/src/auth/domain/user-info.ts"
+          status: "implemented"
+        - path: "hozen_back/src/auth/guards/admin.guard.ts"
+          status: "implemented"
+        - path: "hozen_back/src/auth/guards/__tests__/admin.guard.spec.ts"
+          status: "implemented"
+        - path: "hozen_front/front/src/lib/permissions.ts"
+          status: "implemented"
+        - path: "hozen_front/front/src/lib/__tests__/permissions.test.ts"
+          status: "implemented"
+  WhoCanChange: [admin]
+  SideEffect: null

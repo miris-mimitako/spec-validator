@@ -1,0 +1,205 @@
+Term: "ログイン (Login Action)"
+Definition: "認証処理（act2）を実行し、成功時にチーム自動割当（act1）を行いトップページへ遷移する"
+
+DB:
+  $ref: "../../ddl/employee_inf.prisma#employee_inf.employee_code"
+  Join: "employee_team ON employee_team.employee_code = employee_inf.employee_code; trans_org_to_team ON org fields match"
+
+Domain:
+  BoundedContext: Auth
+  Aggregate: Employee
+  ValueObject: null
+  DomainEvent: LoginSucceeded
+  Rule:
+    - "認証成功時、employee_team にレコードがなければ trans_org_to_team から自動割当する"
+    - "認証失敗時はエラーメッセージを表示"
+    - id: "RULE-001"
+      description: "ログインフロー中（login API 成功直後〜画面遷移完了まで）の補助 API 呼び出し（user-preferences 等）が失敗しても、ログインフロー自体を中断してはならない。失敗時はデフォルト値で続行する"
+      added_by: "bugfix/bugfix_login_session_error_after_submit"
+      implemented_in:
+        - path: "hozen_front/front/src/components/LoginForm.tsx"
+          line: 110
+          status: "implemented"
+    - id: "RULE-002"
+      description: "ログイン API リクエストのタイムアウト値は Lambda cold start（最大 30 秒）を考慮した値（FETCH_TIMEOUT_MS ≥ 30,000ms）に設定しなければならない。タイムアウト発火時は技術的なエラーメッセージではなく日本語の分かりやすいメッセージを表示すること"
+      added_by: "bugfix/bugfix_login_network_errors"
+      implemented_in:
+        - path: "hozen_front/front/src/lib/api/auth.ts"
+          line: 104
+          status: "implemented"
+    - id: "RULE-003"
+      description: "AbortController.abort() を引数なしで呼ぶと 'signal is aborted without reason' が表示される。必ず abort(reason) の形で理由を渡すか、catch ブロックで ApiError に変換すること"
+      added_by: "bugfix/bugfix_login_network_errors"
+      implemented_in:
+        - path: "hozen_front/front/src/lib/api/auth.ts"
+          line: 291
+          status: "implemented"
+    - id: "RULE-004"
+      description: "NestJS の @Injectable() Guard が constructor で DI 依存を持つ場合、その Guard を使用するモジュールは依存プロバイダーを含むモジュールを必ず imports すること。DI 依存のないGuard（例: AdminGuard）とは異なり、モジュール境界を越えた利用にはexports + imports が必須である"
+      added_by: "bugfix/bugfix_csrf_guard_missing_in_control_m"
+      implemented_in:
+        - path: "hozen_back/src/control-master/control-master.module.ts"
+          line: 146
+          status: "implemented"
+    - id: "RULE-005"
+      description: "ログインレスポンスの UserInfoSecure に含めるフィールドは、フロントエンドの Cookie（hozen_employee）に保存される EmployeeCookie 型と一致させること。フロントエンドが参照するフィールドを UserInfoSecure から除外すると、サイレントに undefined となりバグの原因となる"
+      added_by: "bugfix/bugfix_admin_flag_excluded_from_login_response"
+      implemented_in:
+        - path: "hozen_back/src/auth/domain/user-info.ts"
+          line: 31
+          status: "implemented"
+    - id: "RULE-006"
+      description: "認証成功時の JWT は HttpOnly; Secure; SameSite=Strict の Set-Cookie ヘッダで返却し、document.cookie による JS アクセスを禁止する"
+      added_by: "bugfix/bugfix_cookie_httponly_flag"
+      implemented_in:
+        - path: "hozen_back/src/auth/presentation/auth.controller.ts"
+          line: 80
+          status: "implemented"
+        - path: "hozen_back/src/auth/presentation/auth.controller.spec.ts"
+          status: "implemented"
+        - path: "hozen_back/test/auth/auth-security.e2e-spec.ts"
+          status: "implemented"
+    - id: "RULE-007"
+      description: "ログアウト時は認証に使われた source（Authorization / hozen_jwt Cookie）に関わらず同一 JWT をサーバー側ブラックリストへ登録し、あわせて hozen_jwt HttpOnly Cookie をクリアする。logout 後に同一 JWT を再利用した GET /auth/jwt は 401 Unauthorized で拒否しなければならない"
+      added_by: "bugfix/bugfix_cookie_httponly_flag"
+      implemented_in:
+        - path: "hozen_back/src/auth/application/logout.usecase.ts"
+          line: 1
+          status: "implemented"
+        - path: "hozen_back/src/auth/application/logout.usecase.spec.ts"
+          line: 1
+          status: "implemented"
+        - path: "hozen_back/src/auth/presentation/auth.controller.ts"
+          line: 164
+          status: "implemented"
+        - path: "hozen_back/src/auth/presentation/auth.controller.logout.spec.ts"
+          line: 1
+          status: "implemented"
+        - path: "hozen_back/test/auth/auth-cookie-flow.e2e-spec.ts"
+          line: 1
+          status: "implemented"
+        - path: "hozen_issue_control/_docs/_openapi/paths/auth-logout.yaml"
+          status: "implemented"
+    - id: "RULE-008"
+      description: "ログインレスポンス user オブジェクトの型は BE UserInfoSecure と FE UserInfo / EmployeeCookie の間で Single Source of Truth（SSoT）を維持すること。BE の型変更時は FE の型定義を必ず同期更新し、OpenAPI スキーマとの三者一致を保証する"
+      added_by: "bugfix/bugfix_admin_flag_not_in_frontend"
+      implemented_in:
+        - path: "hozen_back/src/auth/domain/user-info.ts"
+          line: 31
+          status: "implemented"
+        - path: "hozen_back/src/auth/domain/user-info.spec.ts"
+          status: "implemented"
+        - path: "hozen_back/test/auth/auth-security.e2e-spec.ts"
+          status: "implemented"
+        - path: "hozen_front/front/src/lib/api/auth.ts"
+          status: "implemented"
+        - path: "hozen_front/front/src/lib/api/__tests__/auth.employee-cookie.test.ts"
+          status: "implemented"
+        - path: "hozen_issue_control/_docs/_openapi/openapi.yaml"
+          status: "implemented"
+    - id: "RULE-009"
+      description: "returnTo パラメータを経由するリダイレクト先は ALLOWED_RETURN_PREFIXES（'/hozen/' 等）の allowlist で検証すること。'/' 始まり・'//' 不含・'..' 不含・許可プレフィックス適合の4条件を満たすもののみ許可し、オープンリダイレクト攻撃を防ぐ"
+      added_by: "issue-orchestration/#308"
+      implemented_in:
+        - path: "hozen_front/front/src/components/LoginForm.tsx"
+          line: 9
+          status: "implemented"
+        - path: "hozen_front/front/src/components/__tests__/LoginFormReturnTo.test.tsx"
+          status: "implemented"
+    - id: "RULE-010"
+      description: "intent パラメータはサーバーサイドではなくフロントエンドのルーティング制御に使用するため、ALLOWED_INTENTS（'new-item' 等）の allowlist で検証し、未知の intent 値は無視すること"
+      added_by: "issue-orchestration/#308"
+      implemented_in:
+        - path: "hozen_front/front/src/components/LoginForm.tsx"
+          line: 21
+          status: "implemented"
+        - path: "hozen_front/front/src/components/__tests__/LoginFormReturnTo.test.tsx"
+          status: "implemented"
+    - id: "RULE-011"
+      description: "レート制限カウンターはログイン失敗（HTTP 401/403）時のみ加算し、ログイン成功（HTTP 200）時はカウンターをリセットまたは加算しないこと。正規ユーザーが正しい認証情報で複数回ログインしてもロックアウトされてはならない"
+      added_by: "bug/rate-limit-counts-success"
+      implemented_in:
+        - path: "hozen_back/src/auth/application/login-attempt-rate-limit.service.ts"
+          line: 1
+          status: "implemented"
+        - path: "hozen_back/test/auth/auth-security.e2e-spec.ts"
+          status: "implemented"
+    - id: "RULE-012"
+      description: "認証済み current user の最新 UserInfoSecure は employee_team 由来の最新 teams[] と canonical is_admin / default_slug を含めて返し、front が hozen_employee cookie を再構築するための単一ソースとする"
+      added_by: "issue-orchestration/#359"
+      implemented_in:
+        - path: "hozen_back/src/auth/application/get-current-user.usecase.ts"
+          line: 24
+          status: "implemented"
+        - path: "hozen_back/src/auth/application/get-current-user.usecase.spec.ts"
+          status: "implemented"
+        - path: "hozen_back/src/auth/presentation/auth.controller.ts"
+          line: 174
+          status: "implemented"
+        - path: "hozen_back/test/auth/auth-cookie-flow.e2e-spec.ts"
+          status: "implemented"
+        - path: "hozen_front/front/src/lib/api/auth.ts"
+          line: 555
+          status: "implemented"
+        - path: "hozen_front/front/src/lib/api/__tests__/auth.current-user.test.ts"
+          status: "implemented"
+        - path: "hozen_issue_control/_docs/_openapi/paths/auth-me.yaml"
+          status: "implemented"
+    - id: "RULE-013"
+      description: "POST /auth/login の OpenAPI は、CSRF 不備による 403（reason 付き）とログイン失敗レート制限による 429（Retry-After + 待機時間を含む日本語メッセージ）を、実装および front のエラーハンドリングと一致する形で記述しなければならない"
+      added_by: "issue-orchestration/#387"
+      implemented_in:
+        - path: "hozen_back/src/auth/guards/csrf.guard.ts"
+          status: "implemented"
+        - path: "hozen_back/src/auth/presentation/login-attempt-rate-limit.filter.ts"
+          status: "implemented"
+        - path: "hozen_front/front/src/lib/api/auth.ts"
+          status: "implemented"
+        - path: "hozen_front/front/src/lib/api/__tests__/auth.login-error-contract.test.ts"
+          status: "implemented"
+        - path: "hozen_issue_control/_docs/_openapi/paths/auth-login.yaml"
+          status: "implemented"
+    - id: "RULE-014"
+      description: "Playwright E2E からのログインは、front が付与する専用ヘッダーを使って login 失敗回数レート制限をバイパスできること。通常リクエストや backend 直叩きのレート制限検証には影響を与えてはならない"
+      added_by: "user-request/2026-03-22-disable-login-rate-limit-during-e2e"
+      implemented_in:
+        - path: "hozen_front/front/src/lib/api/auth.ts"
+          status: "implemented"
+        - path: "hozen_front/front/playwright.config.ts"
+          status: "implemented"
+        - path: "hozen_front/front/src/lib/api/__tests__/auth.login-rate-limit-bypass.test.ts"
+          status: "implemented"
+        - path: "hozen_back/src/auth/presentation/auth.controller.ts"
+          status: "implemented"
+        - path: "hozen_back/src/auth/presentation/login-attempt-rate-limit.filter.ts"
+          status: "implemented"
+        - path: "hozen_back/src/auth/presentation/login-attempt-rate-limit.filter.spec.ts"
+          status: "implemented"
+        - path: "hozen_back/test/auth/auth-security.e2e-spec.ts"
+          status: "implemented"
+    - id: "RULE-015"
+      description: "admin 判定と canonical slug 解決は backend が正規化した is_admin / default_slug を正本とし、front は admin_flag や teams[] を独自解釈して再実装してはならない"
+      added_by: "user-request/2026-03-22-auth-boundary-clarification"
+      implemented_in:
+        - path: "hozen_back/src/auth/domain/user-info.ts"
+          status: "implemented"
+        - path: "hozen_back/src/auth/application/login.usecase.ts"
+          status: "implemented"
+        - path: "hozen_back/src/auth/application/get-current-user.usecase.ts"
+          status: "implemented"
+        - path: "hozen_front/front/src/lib/api/auth.ts"
+          status: "implemented"
+        - path: "hozen_front/front/src/lib/permissions.ts"
+          status: "implemented"
+        - path: "hozen_front/front/src/components/LoginForm.tsx"
+          status: "implemented"
+        - path: "hozen_front/front/src/components/QuickNewItemButton.tsx"
+          status: "implemented"
+        - path: "hozen_front/front/src/lib/useSlugGuard.ts"
+          status: "implemented"
+        - path: "hozen_issue_control/_docs/_openapi/paths/auth-login.yaml"
+          status: "implemented"
+        - path: "hozen_issue_control/_docs/_openapi/paths/auth-me.yaml"
+          status: "implemented"
+  WhoCanChange: [guest]
+  SideEffect: "セッション（JWT）発行、employee_team 自動割当（該当時）、user_preferences Cookie 保存"

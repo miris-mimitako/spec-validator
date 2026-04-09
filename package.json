@@ -11,7 +11,11 @@
     "validate:traceability:pass": "python .agents/spec-naming-validator/scripts/validate_traceability.py --implementation-path examples/traceability-pass/src --test-path examples/traceability-pass/test --format text",
     "validate:traceability:fail": "python .agents/spec-naming-validator/scripts/validate_traceability.py --implementation-path examples/traceability-fail/src --test-path examples/traceability-fail/test --format text",
     "report:traceability:pass": "python .agents/spec-naming-validator/scripts/validate_traceability.py --implementation-path examples/traceability-pass/src --test-path examples/traceability-pass/test --format text --report reports/traceability-pass-report.md --report-format markdown",
-    "report:traceability:fail": "python .agents/spec-naming-validator/scripts/validate_traceability.py --implementation-path examples/traceability-fail/src --test-path examples/traceability-fail/test --format text --report reports/traceability-fail-report.md --report-format markdown"
+    "report:traceability:fail": "python .agents/spec-naming-validator/scripts/validate_traceability.py --implementation-path examples/traceability-fail/src --test-path examples/traceability-fail/test --format text --report reports/traceability-fail-report.md --report-format markdown",
+    "validate:spec-structure:samples": "python .agents/spec-naming-validator/scripts/validate_spec_structure.py --spec-root samples --format text",
+    "report:spec-structure:samples": "python .agents/spec-naming-validator/scripts/validate_spec_structure.py --spec-root samples --format text --report reports/spec-structure-samples-report.md --report-format markdown",
+    "validate:spec-structure:specs": "python .agents/spec-naming-validator/scripts/validate_spec_structure.py --spec-root _docs/_Specs --format text",
+    "report:spec-structure:specs": "python .agents/spec-naming-validator/scripts/validate_spec_structure.py --spec-root _docs/_Specs --format text --report reports/spec-structure-specs-report.md --report-format markdown"
   },
   "repository": {
     "type": "git",

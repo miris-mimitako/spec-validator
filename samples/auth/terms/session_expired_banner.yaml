@@ -1,0 +1,50 @@
+Term: "セッション切れバナー (Session Expired Banner)"
+Definition: "セッション有効期限切れ時に表示される警告バナー"
+
+DB: null
+
+Domain:
+  BoundedContext: Auth
+  Aggregate: null
+  ValueObject: null
+  DomainEvent: SessionExpired
+  Rule:
+    - id: "RULE-TEXT-001"
+      description: "URL パラメータまたはセッション状態から期限切れを検出した場合のみ表示する"
+      added_by: "bugfix/bugfix_login_session_error_after_submit"
+      implemented_in:
+        - path: "hozen_front/front/src/lib/sessionExpired.ts"
+          line: 11
+          status: "implemented"
+        - path: "hozen_front/front/src/lib/api/auth.ts"
+          line: 573
+          status: "implemented"
+        - path: "hozen_front/front/src/lib/api/auth.ts"
+          line: 629
+          status: "implemented"
+    - id: "RULE-TEXT-002"
+      description: "通常時は非表示（hidden）を維持する"
+      added_by: "bugfix/bugfix_login_session_error_after_submit"
+      implemented_in:
+        - path: "hozen_front/front/src/lib/sessionExpired.ts"
+          line: 11
+          status: "implemented"
+    - id: "RULE-001"
+      description: "ログインページ上で handleUnauthorized() は発動しない。ログインページでの 401 応答はセッション切れではなく、未認証状態として静かに処理する"
+      added_by: "bugfix/bugfix_login_session_error_after_submit"
+      implemented_in:
+        - path: "hozen_front/front/src/lib/api/auth.ts"
+          line: 471
+          status: "implemented"
+    - id: "RULE-002"
+      description: "ThrottlerGuard から返される 429 TooManyRequests は AllExceptionsFilter で適切にフォーマットし、フロントエンドの 429 ハンドラーで待機時間を含むメッセージを表示すること。500 に変換してはならない"
+      added_by: "bugfix/bugfix_login_network_errors"
+      implemented_in:
+        - path: "hozen_back/src/common/filter/all-exceptions.filter.ts"
+          line: 107
+          status: "implemented"
+        - path: "hozen_front/front/src/lib/api/auth.ts"
+          line: 373
+          status: "implemented"
+  WhoCanChange: null
+  SideEffect: null

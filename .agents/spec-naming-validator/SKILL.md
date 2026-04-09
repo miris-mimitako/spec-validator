@@ -42,6 +42,12 @@ Run static traceability validation:
 python .agents/spec-naming-validator/scripts/validate_traceability.py --implementation-path examples/traceability-pass/src --test-path examples/traceability-pass/test --format text
 ```
 
+Validate spec structure and canonical ids:
+
+```powershell
+python .agents/spec-naming-validator/scripts/validate_spec_structure.py --spec-root samples --format text
+```
+
 Use `// TRACE: ...` comments for implementation and test annotations so the validator can recognize them.
 
 Get machine-readable output:

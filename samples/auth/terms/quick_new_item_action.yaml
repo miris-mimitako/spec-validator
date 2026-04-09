@@ -1,0 +1,43 @@
+Term: "すぐに引継ぎを書く (Quick New Item)"
+Definition: "認証済みなら直接 new-item へ遷移、未認証ならログインフォームへ誘導し intent=new-item で遷移先を変更する"
+
+DB: null
+
+Domain:
+  BoundedContext: Auth
+  Aggregate: null
+  ValueObject: null
+  DomainEvent: null
+  Rule:
+    - id: "RULE-001"
+      description: "認証済みユーザーが「すぐに引継ぎを書く」を押した場合、hozen_employee Cookie に保持した canonical defaultSlug（backend が teams から正規化した値）を用いて /{slug}/new-item へ直接遷移できる href を提示すること"
+      added_by: "issue-high-risk/#414"
+      implemented_in:
+        - path: "hozen_front/front/src/components/QuickNewItemButton.tsx"
+          status: "implemented"
+        - path: "hozen_front/front/src/components/__tests__/QuickNewItemButton.test.tsx"
+          status: "implemented"
+        - path: "hozen_front/front/src/components/QuickNewItemButton.e2e-spec.ts"
+          status: "implemented"
+    - id: "RULE-002"
+      description: "未認証ユーザーが「すぐに引継ぎを書く」を押した場合、URL に intent=new-item を保持し、ログインフォームへ focus / scroll させると同時に、ログインが必要であることを視覚的に案内する。intent=new-item が既に付与済みでも no-op にしてはならない"
+      added_by: "issue-high-risk/#414"
+      implemented_in:
+        - path: "hozen_front/front/src/components/QuickNewItemButton.tsx"
+          status: "implemented"
+        - path: "hozen_front/front/src/components/__tests__/QuickNewItemButton.test.tsx"
+          status: "implemented"
+        - path: "hozen_front/front/src/components/QuickNewItemButton.e2e-spec.ts"
+          status: "implemented"
+    - id: "RULE-003"
+      description: "intent=new-item でログイン成功した場合、遷移先はデフォルトの hikitsugi-menu ではなく /{slug}/new-item でなければならない"
+      added_by: "issue-high-risk/#414"
+      implemented_in:
+        - path: "hozen_front/front/src/components/LoginForm.tsx"
+          status: "implemented"
+        - path: "hozen_front/front/src/components/__tests__/LoginFormReturnTo.test.tsx"
+          status: "implemented"
+        - path: "hozen_front/front/src/components/QuickNewItemButton.e2e-spec.ts"
+          status: "implemented"
+  WhoCanChange: [guest]
+  SideEffect: null

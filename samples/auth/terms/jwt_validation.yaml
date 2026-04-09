@@ -1,0 +1,53 @@
+Term: "JWT 認証確認 (JWT Validation)"
+Definition: "GET /auth/jwt で JWT の有効性を検証し、認証済みかどうかを判定するための最小ペイロードを返す"
+
+DB:
+  $ref: null
+  Join: null
+
+Domain:
+  BoundedContext: Auth
+  Aggregate: null
+  ValueObject: null
+  DomainEvent: JwtValidated
+  Rule:
+    - id: "RULE-001"
+      description: "GET /auth/jwt は Authorization: Bearer {token} と hozen_jwt HttpOnly Cookie の両方を認証入力として受け入れ、どちらでも同一の検証結果を返さなければならない"
+      added_by: "issue-orchestration/#387"
+      implemented_in:
+        - path: "hozen_back/src/auth/infrastructure/strategy/jwt.strategy.ts"
+          status: "implemented"
+        - path: "hozen_issue_control/_docs/_openapi/paths/auth-jwt.yaml"
+          status: "implemented"
+    - id: "RULE-002"
+      description: "GET /auth/jwt のレスポンスは認証確認に必要な最小ペイロード（sub, userId, iat, exp）のみを返し、teamCodes・factoryCode・adminFlag など追加クレームをそのまま露出してはならない"
+      added_by: "issue-orchestration/#387"
+      implemented_in:
+        - path: "hozen_back/src/auth/presentation/auth.controller.ts"
+          status: "implemented"
+        - path: "hozen_back/src/auth/presentation/auth.controller.jwt.spec.ts"
+          status: "implemented"
+        - path: "hozen_back/test/auth/auth-cookie-flow.e2e-spec.ts"
+          status: "implemented"
+        - path: "hozen_issue_control/_docs/_openapi/paths/auth-jwt.yaml"
+          status: "implemented"
+    - id: "RULE-003"
+      description: "JWT が欠落・形式不正・署名不正・期限切れ・ブラックリスト済みのいずれであっても、GET /auth/jwt は 401 Unauthorized を返し、詳細な失敗理由をレスポンスボディに露出しない"
+      added_by: "issue-orchestration/#387"
+      implemented_in:
+        - path: "hozen_back/src/auth/infrastructure/guard/jwt-auth.guard.ts"
+          status: "implemented"
+        - path: "hozen_back/test/auth/auth-cookie-flow.e2e-spec.ts"
+          status: "implemented"
+        - path: "hozen_issue_control/_docs/_openapi/paths/auth-jwt.yaml"
+          status: "implemented"
+    - id: "RULE-004"
+      description: "JWT の exp は '現在時刻 < exp' の間だけ有効とし、現在時刻が exp と同値になった時点で期限切れ（401 Unauthorized）として扱う"
+      added_by: "issue-high-risk/#526"
+      implemented_in:
+        - path: "hozen_back/src/auth/presentation/auth.jwt-exp-boundary.spec.ts"
+          status: "implemented"
+        - path: "hozen_issue_control/_docs/_openapi/paths/auth-jwt.yaml"
+          status: "implemented"
+  WhoCanChange: [system]
+  SideEffect: null

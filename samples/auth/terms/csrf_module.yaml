@@ -1,0 +1,63 @@
+Term: "CSRF モジュール (CsrfModule)"
+Definition: "CSRF 検証機能（CsrfService + CsrfGuard）を集約する NestJS モジュール。CSRF 保護が必要な任意のモジュールで imports して利用する"
+
+DB:
+  $ref: null
+  Join: null
+
+Domain:
+  BoundedContext: Auth
+  Aggregate: null
+  ValueObject: null
+  DomainEvent: null
+  Rule:
+    - id: "RULE-001"
+      description: "CsrfService および CsrfGuard は専用の CsrfModule に集約し、CSRF 検証が必要なすべてのモジュールで CsrfModule を imports すること。AuthModule に直接 CsrfService を登録してはならない"
+      added_by: "bugfix/bugfix_csrf_guard_missing_in_control_m"
+      implemented_in:
+        - path: "hozen_back/src/auth/csrf.module.ts"
+          line: 1
+          status: "implemented"
+        - path: "hozen_back/src/auth/auth.module.ts"
+          line: 29
+          status: "implemented"
+    - id: "RULE-002"
+      description: "CsrfGuard を @UseGuards() で使用するモジュールは、必ず CsrfModule を imports に含めること。CsrfModule を imports せずに CsrfGuard を使用すると NestJS の DI 解決が失敗し UnknownDependenciesException が発生する"
+      added_by: "bugfix/bugfix_csrf_svc_not_provided_ctrl_mod"
+      implemented_in:
+        - path: "hozen_back/src/control-master/control-master.module.ts"
+          line: 146
+          status: "implemented"
+        - path: "hozen_back/src/org-team-mapping/org-team-mapping.module.ts"
+          line: 23
+          status: "implemented"
+        - path: "hozen_back/src/production-plan-process/production-plan-process.module.ts"
+          line: 12
+          status: "implemented"
+    - id: "RULE-003"
+      description: "フロントエンドの mutation リクエスト（POST/PUT/PATCH/DELETE）を実装する API 関数は、getCsrfToken() で csrf_token Cookie を読み取り、X-CSRF-Token ヘッダーとして付与すること。auth.ts の login() 関数のパターン（...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {})）を踏襲する"
+      added_by: "bugfix/bugfix_csrf_token_missing_in_put"
+      implemented_in:
+        - path: "hozen_front/front/src/lib/api/auth.ts"
+          line: 177
+          status: "implemented"
+        - path: "hozen_front/front/src/lib/api/auth.ts"
+          line: 216
+          status: "implemented"
+        - path: "hozen_front/front/src/lib/api/todoItem.ts"
+          line: 83
+          status: "implemented"
+    - id: "RULE-004"
+      description: "GET /auth/csrf-token は csrf_token Cookie と同じ値をレスポンスボディ token に返し、トークン生成不能時は 500 ではなく 503 Service Unavailable を返す。POST /auth/login の CSRF 検証失敗時は 403 と reason（csrf_missing / csrf_invalid）を返して OpenAPI と一致させる"
+      added_by: "issue-orchestration/#387"
+      implemented_in:
+        - path: "hozen_back/src/auth/presentation/auth.controller.ts"
+          status: "implemented"
+        - path: "hozen_back/src/auth/guards/csrf.guard.ts"
+          status: "implemented"
+        - path: "hozen_issue_control/_docs/_openapi/paths/auth-csrf-token.yaml"
+          status: "implemented"
+        - path: "hozen_issue_control/_docs/_openapi/paths/auth-login.yaml"
+          status: "implemented"
+  WhoCanChange: [admin]
+  SideEffect: null

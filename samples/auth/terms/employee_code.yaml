@@ -1,0 +1,45 @@
+Term: "社員コード (Employee Code)"
+Definition: "ログイン認証に使用する社員の一意識別子"
+
+DB:
+  $ref: "../../ddl/employee_inf.prisma#employee_inf.employee_code"
+
+Domain:
+  BoundedContext: Auth
+  Aggregate: Employee
+  ValueObject: EmployeeCode
+  DomainEvent: null
+  Rule:
+    - id: "RULE-001"
+      description: "社員コードは必須入力とする"
+      implemented_in:
+        - path: "hozen_back/src/auth/presentation/dto/login-request.dto.ts"
+          status: "implemented"
+        - path: "hozen_back/src/auth/presentation/dto/login-request.dto.spec.ts"
+          status: "implemented"
+    - id: "RULE-002"
+      description: "社員コードは4〜20文字であること"
+      implemented_in:
+        - path: "hozen_back/src/auth/presentation/dto/login-request.dto.ts"
+          status: "implemented"
+        - path: "hozen_back/src/auth/domain/value-objects/user-id.vo.ts"
+          status: "implemented"
+        - path: "hozen_back/src/auth/presentation/dto/login-request.dto.spec.ts"
+          status: "implemented"
+        - path: "hozen_back/src/auth/domain/value-objects/user-id.vo.spec.ts"
+          status: "implemented"
+    - id: "RULE-003"
+      description: "社員コードは半角英数字のみを許可し、ハイフン・記号・全角文字を受け付けてはならない"
+      implemented_in:
+        - path: "hozen_back/src/auth/presentation/dto/login-request.dto.ts"
+          status: "implemented"
+        - path: "hozen_back/src/auth/domain/value-objects/user-id.vo.ts"
+          status: "implemented"
+        - path: "hozen_back/src/auth/presentation/dto/login-request.dto.spec.ts"
+          status: "implemented"
+        - path: "hozen_back/src/auth/domain/value-objects/user-id.vo.spec.ts"
+          status: "implemented"
+        - path: "hozen_issue_control/_docs/_openapi/openapi.yaml"
+          status: "implemented"
+  WhoCanChange: null
+  SideEffect: null

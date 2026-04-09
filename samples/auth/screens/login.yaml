@@ -1,0 +1,212 @@
+Path: /
+Screen: "ログイン画面 (Login)"
+Purpose: "社員コードとパスワードで認証し、チーム未割当の場合は組織マスタから自動割当してトップページへ遷移する"
+Actor: guest
+Invariants:
+  - id: "INVARIANT-001"
+    description: "認証成功時、employee_team にレコードがない場合は trans_org_to_team から自動割当する"
+    implemented_in:
+      - path: "hozen_back/src/auth/application/login.usecase.ts"
+        status: "implemented"
+      - path: "hozen_back/src/auth/infrastructure/adapter/team-auto-assign.adapter.ts"
+        status: "implemented"
+      - path: "hozen_back/src/auth/application/login.usecase.spec.ts"
+        status: "implemented"
+      - path: "hozen_back/test/auth/auth-security.e2e-spec.ts"
+        status: "implemented"
+      - path: "hozen_front/front/e2e/auth/login.spec.ts"
+        status: "implemented"
+  - id: "INVARIANT-002"
+    description: "User ID は半角英数字4〜20文字の必須入力"
+    implemented_in:
+      - path: "hozen_front/front/src/components/LoginForm.tsx"
+        status: "implemented"
+      - path: "hozen_front/front/src/components/__tests__/LoginForm.test.tsx"
+        status: "implemented"
+      - path: "hozen_front/front/e2e/auth/login.spec.ts"
+        status: "implemented"
+  - id: "INVARIANT-003"
+    description: "Password は必須入力（最大72文字）"
+    implemented_in:
+      - path: "hozen_front/front/src/components/LoginForm.tsx"
+        status: "implemented"
+      - path: "hozen_front/front/src/components/__tests__/LoginForm.test.tsx"
+        status: "implemented"
+      - path: "hozen_front/front/e2e/auth/login.spec.ts"
+        status: "implemented"
+  - "認証失敗時はエラーメッセージを表示し、画面遷移しない"
+  - id: "INV-001"
+    description: "ログイン成功後の補助 API 呼び出し（user-preferences 取得等）が失敗しても、handleUnauthorized() による強制ログアウトは発生しない"
+    added_by: "bugfix/bugfix_login_session_error_after_submit"
+    implemented_in:
+      - path: "hozen_front/front/src/lib/api/userPreferences.ts"
+        status: "implemented"
+      - path: "hozen_front/front/src/components/LoginForm.tsx"
+        status: "implemented"
+      - path: "hozen_front/front/src/components/__tests__/LoginForm.integration.test.tsx"
+        status: "implemented"
+      - path: "hozen_front/front/e2e/auth/login.spec.ts"
+        status: "implemented"
+  - id: "INV-002"
+    description: "ログインページ上での 401 レスポンスは handleUnauthorized() をトリガーしない"
+    added_by: "bugfix/bugfix_login_session_error_after_submit"
+    implemented_in:
+      - path: "hozen_front/front/src/lib/api/auth.ts"
+        status: "implemented"
+      - path: "hozen_front/front/src/lib/api/__tests__/auth.unauthorized.test.ts"
+        status: "implemented"
+      - path: "hozen_front/front/src/components/__tests__/LoginForm.integration.test.tsx"
+        status: "implemented"
+      - path: "hozen_front/front/e2e/auth/login-ui.spec.ts"
+        status: "implemented"
+      - path: "hozen_front/front/e2e/auth/session-timeout.spec.ts"
+        status: "implemented"
+  - id: "INV-003"
+    description: "ログイン画面の API タイムアウトは Lambda cold start（最大 30 秒）を考慮した値に設定し、タイムアウト時にはユーザーが理解できる日本語メッセージを表示すること"
+    added_by: "bugfix/bugfix_login_network_errors"
+    implemented_in:
+      - path: "hozen_front/front/src/lib/api/auth.ts"
+        status: "implemented"
+      - path: "hozen_front/front/src/components/LoginForm.tsx"
+        status: "implemented"
+      - path: "hozen_front/front/src/lib/api/__tests__/auth.timeout.test.ts"
+        status: "implemented"
+      - path: "hozen_front/front/src/components/__tests__/LoginForm.integration.test.tsx"
+        status: "implemented"
+      - path: "hozen_front/front/e2e/auth/login.spec.ts"
+        status: "implemented"
+  - id: "INV-004"
+    description: "CSRF トークン取得（GET /auth/csrf-token）は補助処理であり、取得失敗時はリトライを試み、リトライ後も失敗した場合のみユーザーへのガイドメッセージを表示する。ログインフロー自体をブロックしてはならない"
+    added_by: "bugfix/bugfix_login_network_errors"
+    implemented_in:
+      - path: "hozen_front/front/src/components/LoginForm.tsx"
+        status: "implemented"
+      - path: "hozen_front/front/src/components/__tests__/LoginForm.integration.test.tsx"
+        status: "implemented"
+      - path: "hozen_front/front/e2e/auth/auth_security_hardening.spec.ts"
+        status: "implemented"
+  - id: "INV-005"
+    description: "ログイン試行回数がレートリミット（5回/15分）に達した場合は、技術的な HTTP ステータスコードではなく待機時間を含む日本語メッセージを表示すること"
+    added_by: "bugfix/bugfix_login_network_errors"
+  - id: "INV-006"
+    description: "CSRF 検証機能（CsrfGuard + CsrfService）は独立した CsrfModule として提供され、認証以外のドメインモジュール（ControlMasterModule 等）でも再利用可能でなければならない"
+    added_by: "bugfix/bugfix_csrf_guard_missing_in_control_m"
+    implemented_in:
+      - path: "hozen_back/src/auth/csrf.module.ts"
+        status: "implemented"
+      - path: "hozen_back/src/control-master/control-master.module.ts"
+        status: "implemented"
+      - path: "hozen_back/test/auth/csrf-module-import-regression.e2e-spec.ts"
+        status: "implemented"
+      - path: "hozen_front/front/e2e/auth/auth_security_hardening.spec.ts"
+        status: "implemented"
+  - id: "INV-007"
+    description: "ログインレスポンスの user オブジェクトには admin_flag を含めること。admin_flag はフロントエンドの管理者判定に必要であり、VER-014 機密フィールド除外の対象外とする"
+    added_by: "bugfix/bugfix_admin_flag_excluded_from_login_response"
+    implemented_in:
+      - path: "hozen_back/test/auth/auth-security.e2e-spec.ts"
+        status: "implemented"
+      - path: "hozen_front/front/src/lib/api/auth.ts"
+        status: "implemented"
+      - path: "hozen_front/front/src/lib/api/__tests__/auth.employee-cookie.test.ts"
+        status: "implemented"
+      - path: "hozen_front/front/e2e/auth/login.spec.ts"
+        status: "implemented"
+  - id: "INV-008"
+    description: "JWT トークンは HttpOnly Cookie でのみ管理し、フロントエンドの JavaScript から直接アクセスできないこと（XSS 対策）"
+    added_by: "bugfix/bugfix_cookie_httponly_flag"
+  - id: "INV-009"
+    description: "ログアウト時にサーバー側で hozen_jwt HttpOnly Cookie がクリアされること"
+    added_by: "bugfix/bugfix_cookie_httponly_flag"
+  - id: "INV-011"
+    description: "レート制限はログイン失敗（認証エラー）のみをカウント対象とし、ログイン成功時はカウンターをリセットまたは加算対象外とする。正規ユーザーが繰り返しログインしても HTTP 429 によるロックアウトが発生しないこと"
+    added_by: "bug/rate-limit-counts-success"
+    implemented_in:
+      - path: "hozen_back/src/auth/presentation/login-attempt-rate-limit.filter.ts"
+        line: 1
+        status: "implemented"
+  - id: "INV-010"
+    description: "FE の EmployeeCookie / UserInfo 型定義は BE の UserInfoSecure 型定義と同一のフィールドセットを持つこと。BE で除外されたフィールド（del_flag / department_code / employee_flag）は FE 型からも削除すること"
+    added_by: "bugfix/bugfix_admin_flag_not_in_frontend"
+    implemented_in:
+      - path: "hozen_back/src/auth/domain/user-info.ts"
+        status: "implemented"
+      - path: "hozen_back/test/auth/auth-security.e2e-spec.ts"
+        status: "implemented"
+      - path: "hozen_back/test/auth/auth-cookie-flow.e2e-spec.ts"
+        status: "implemented"
+      - path: "hozen_front/front/src/lib/api/auth.ts"
+        status: "implemented"
+      - path: "hozen_front/front/src/lib/api/__tests__/auth.employee-cookie.test.ts"
+        status: "implemented"
+      - path: "hozen_front/front/src/lib/api/__tests__/auth.current-user.test.ts"
+        status: "implemented"
+      - path: "hozen_front/front/e2e/auth/login.spec.ts"
+        status: "implemented"
+  - id: "INV-012"
+    description: "標準ログイン成功時は CSRF 保護付きで POST /auth/login を完了し、hozen_jwt HttpOnly Cookie と canonical user 情報を同期したうえで /{default_slug}/hikitsugi-menu へ遷移する"
+    added_by: "issue-orchestration/#1688"
+    implemented_in:
+      - path: "hozen_back/src/auth/presentation/auth.controller.ts"
+        status: "implemented"
+      - path: "hozen_back/test/auth/auth-security.e2e-spec.ts"
+        status: "implemented"
+      - path: "hozen_front/front/src/components/LoginForm.tsx"
+        status: "implemented"
+      - path: "hozen_front/front/src/lib/api/auth.ts"
+        status: "implemented"
+      - path: "hozen_front/front/src/lib/api/__tests__/auth.employee-cookie.test.ts"
+        status: "implemented"
+      - path: "hozen_front/front/e2e/auth/login.spec.ts"
+        status: "implemented"
+      - path: "hozen_front/front/e2e/auth/auth_security_hardening.spec.ts"
+        status: "implemented"
+
+InitAction:
+  act1:
+    Description: |
+      ログイン処理後、次の画面に遷移する前にチーム自動割当を行う。
+      employee_team に該当 employee_code のレコードが存在するか確認する。
+      存在しない場合、employee_inf の org 系カラム（base_code, location_code, location_gr_code）を使い、
+      trans_org_to_team で一致する team_code を取得して employee_team に割り当てる。
+    DataSource: "employee_team WHERE employee_code = {login_user} → trans_org_to_team WHERE factory_code, base_code, location_code, location_gr_code"
+  act2:
+    Description: |
+      ログイン認証処理。
+      employee_inf.employee_code と employee_inf.employee_password をもとに認証を行う。
+      認証成功 → セッション（JWT）を発行してトップページ（/{slug}/hikitsugi-menu）へ遷移。
+      認証失敗 → エラーメッセージを表示。
+    DataSource: "employee_inf WHERE employee_code = {input} AND employee_password = {input}"
+
+Terms:
+  - UILabel: "User ID / 社員コード"
+    Behavior: editable
+    Filterable: false
+    InitFrom: null
+    Ref:
+      $ref: "../terms/employee_code.yaml"
+
+  - UILabel: "Password / パスワード"
+    Behavior: editable
+    Filterable: false
+    InitFrom: null
+    Ref:
+      $ref: "../terms/employee_password.yaml"
+
+  - UILabel: "ログインボタン"
+    Behavior: action
+    Filterable: false
+    Ref:
+      $ref: "../terms/login_action.yaml"
+
+  - UILabel: "すぐに引継ぎを書く"
+    Behavior: action
+    Filterable: false
+    Ref:
+      $ref: "../terms/quick_new_item_action.yaml"
+
+  - UILabel: "セッション切れバナー"
+    Behavior: display_only
+    Filterable: false
+    Ref:
+      $ref: "../terms/session_expired_banner.yaml"
