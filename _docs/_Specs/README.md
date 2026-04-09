@@ -25,6 +25,7 @@
 - `auth.screens.login.INV-004`
 
 正規化ルールの詳細は [`20_spec-structure.yaml`](/D:/application/spec-validator/_docs/_GroundRules/20_spec-structure.yaml) を参照します。
+仕様書の書き方そのものは [`21_spec-authoring-rules.yaml`](/D:/application/spec-validator/_docs/_GroundRules/21_spec-authoring-rules.yaml) を参照します。
 
 ## sample との関係
 

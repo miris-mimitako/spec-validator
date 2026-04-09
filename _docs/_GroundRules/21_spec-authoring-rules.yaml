@@ -1,0 +1,172 @@
+version: 1
+id: spec-authoring-rules
+status: draft
+
+purpose: >
+  `_docs/_Specs` に配置する仕様書の書き方を定義する。
+  機械判定できる最小情報を必ず含め、仕様、実装、テストの
+  トレーサビリティを維持できる状態で記述することを目的とする。
+
+scope:
+  target_root: "_docs/_Specs"
+  target_documents:
+    - screens
+    - logics
+    - terms
+
+authoring_principles:
+  - principle_id: SPEC-AUTH-001
+    name: single-source-of-truth
+    rule: >
+      仕様ルールの正本は `_docs/_Specs` に置く。
+      実装コード、テストコード、チケット本文を仕様の正本にしてはならない。
+  - principle_id: SPEC-AUTH-002
+    name: machine-readable-first
+    rule: >
+      仕様は人間が読める自然言語だけでなく、validator が読める構造化項目を持たなければならない。
+  - principle_id: SPEC-AUTH-003
+    name: traceability-required
+    rule: >
+      実装やテストに紐づく仕様ルールには、一意な rule id を付与しなければならない。
+  - principle_id: SPEC-AUTH-004
+    name: one-rule-one-intent
+    rule: >
+      1つの rule id には 1つの検証意図だけを持たせる。
+      複数の条件や責務を 1つの rule に混在させてはならない。
+
+document_required_fields:
+  common:
+    - domain
+    - kind
+    - name
+    - summary
+  recommended:
+    - owner
+    - status
+    - references
+  rules_section_names:
+    - Rule
+    - Rules
+    - Invariants
+    - Constraints
+    - Scenarios
+
+rule_required_fields:
+  required:
+    - id
+    - description
+  recommended:
+    - rationale
+    - examples
+    - implemented_in
+    - test_patterns
+    - notes
+  field_guidance:
+    id: "ファイル内で一意な local id を使う。例: RULE-001, INV-004"
+    description: "仕様として成立する完全文で書く。曖昧な名詞句だけにしない。"
+    rationale: "なぜその制約が必要かを書く。"
+    examples: "正常例と異常例を分けて書く。"
+    implemented_in: "実装追跡がある場合は path と status を持つ。"
+    test_patterns: "必要な test rule pattern を列挙する。"
+
+writing_style:
+  rules:
+    - "description は SHALL 相当の強い制約として書く"
+    - "主語を省略しすぎない"
+    - "数値制約は比較可能な形で書く"
+    - "曖昧語を避ける: appropriate, etc, and so on, maybe"
+    - "1文に複数の検証条件を詰め込みすぎない"
+  examples:
+    preferred:
+      - "user-id は 3 文字以上 10 文字以内でなければならない。"
+      - "login action は employee-code と password の両方が揃ったときのみ実行可能である。"
+    discouraged:
+      - "user-id should be valid."
+      - "必要に応じてチェックする。"
+
+traceability_authoring:
+  implemented_in:
+    item_required_fields:
+      - path
+      - status
+    allowed_status_values:
+      - implemented
+      - planned
+      - omitted
+  test_patterns:
+    source_of_truth: "_docs/_GroundRules/10_test-rules.yaml"
+    rule: >
+      仕様ルールに対して必要なテスト観点は `test_patterns` に明示する。
+      実コード側では comment annotation により rule id と test id を紐づける。
+  omission_policy:
+    rule: >
+      実施できないケースは仕様から削除せず、テスト側で OMITTED と Reason を明示する。
+
+recommended_document_templates:
+  terms: |
+    domain: auth
+    kind: terms
+    name: employee_code
+    summary: 社員コードに関する用語仕様
+    Rules:
+      - id: RULE-001
+        description: employee-code は 6 桁の数字でなければならない。
+        rationale: 社内の既存識別体系に合わせるため。
+        examples:
+          valid:
+            - "123456"
+          invalid:
+            - "12345"
+            - "ABC123"
+        test_patterns:
+          - format-basic
+        implemented_in:
+          - path: src/domain/auth/employee_code.py
+            status: implemented
+  logics: |
+    domain: auth
+    kind: logics
+    name: login
+    summary: ログイン処理の業務仕様
+    Rules:
+      - id: RULE-001
+        description: login action は employee-code と password の両方が指定された場合にのみ実行可能である。
+        test_patterns:
+          - required-basic
+        implemented_in:
+          - path: src/application/auth/login_use_case.py
+            status: implemented
+  screens: |
+    domain: auth
+    kind: screens
+    name: login
+    summary: ログイン画面仕様
+    Invariants:
+      - id: INV-001
+        description: login 画面には employee-code 入力欄と password 入力欄が表示されなければならない。
+        notes:
+          - employee-code は terms/employee_code.yaml を参照する。
+
+anti_patterns:
+  - anti_pattern_id: SPEC-ANTI-001
+    name: rule-without-id
+    description: >
+      description だけを書いて id を付けない。
+      この書き方では実装やテストとの紐づけができない。
+  - anti_pattern_id: SPEC-ANTI-002
+    name: mixed-multiple-obligations
+    description: >
+      1つの rule に入力制約、認可制約、副作用制約をまとめて書く。
+      テスト観点と実装責務の分解ができなくなる。
+  - anti_pattern_id: SPEC-ANTI-003
+    name: implementation-as-spec
+    description: >
+      仕様書にフレームワーク都合のクラス名や関数名だけを書き、業務ルールの説明を書かない。
+
+review_checklist:
+  - "domain, kind, name, summary があるか"
+  - "各 rule に id と description があるか"
+  - "description が検証可能な文になっているか"
+  - "必要な test_patterns が定義されているか"
+  - "implemented_in の status が妥当か"
+  - "他 spec への参照がある場合に追跡可能か"
