@@ -7,6 +7,7 @@ Current scope:
 - Reuse the existing Python validators in `src/spec_validator/`
 - Reuse spec structure, traceability, and reporting flows
 - Apply naming validation to Python identifiers and file names through `00_standard-language-python.yaml`
+- Apply static security validation to Python files through `40_security-rules-python.yaml`
 
 Current limitation:
 

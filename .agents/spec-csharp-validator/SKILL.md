@@ -43,6 +43,12 @@ Validate layered DIP rules:
 python .agents/spec-csharp-validator/scripts/validate_architecture.py --path examples/csharp-architecture-pass/src --format text
 ```
 
+Validate static security rules:
+
+```powershell
+python .agents/spec-csharp-validator/scripts/validate_security.py --path examples/csharp-security-pass/src --format text
+```
+
 Write a Markdown report:
 
 ```powershell

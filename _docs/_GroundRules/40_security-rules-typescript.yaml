@@ -1,0 +1,102 @@
+version: 1
+id: security-rules-typescript
+status: draft
+
+purpose: >
+  TypeScript / NestJS 向けの静的セキュリティルールを定義する。
+  実行時 exploit の成立ではなく、危険なコードパターンの存在を検出する。
+
+policy:
+  target_language: typescript
+  scan_extensions:
+    - ".ts"
+  comment_prefixes:
+    - "//"
+
+rules:
+  - rule_id: SEC-001
+    issue_code: SENSITIVE_DATA_LOGGING
+    severity: error
+    description: >
+      password, token, secret, api key などの機密情報をログ出力してはならない。
+  - rule_id: SEC-002
+    issue_code: SQL_INJECTION_RISK
+    severity: error
+    description: >
+      SQL 文字列を連結や template literal で組み立てて実行してはならない。
+      パラメータ化された query を使う。
+  - rule_id: SEC-003
+    issue_code: FORBIDDEN_DIRECT_LITERAL_ASSIGNMENT
+    severity: error
+    description: >
+      リテラル値を変数やプロパティへ直接代入してはならない。
+      必ず const 宣言を経由して参照する。
+  - rule_id: SEC-004
+    issue_code: FORBIDDEN_DANGEROUS_API
+    severity: warning
+    description: >
+      eval, child_process 実行, Function constructor などの危険 API は原則禁止する。
+
+detection:
+  sensitive_logging:
+    logger_tokens:
+      - "console.log"
+      - "console.info"
+      - "console.warn"
+      - "console.error"
+      - "logger.log"
+      - "logger.debug"
+      - "logger.warn"
+      - "logger.error"
+    sensitive_terms:
+      - "password"
+      - "passwd"
+      - "pwd"
+      - "token"
+      - "secret"
+      - "apikey"
+      - "api_key"
+      - "access_token"
+      - "refresh_token"
+      - "authorization"
+  sql_injection_risk:
+    execution_tokens:
+      - "$queryRawUnsafe"
+      - "$executeRawUnsafe"
+      - ".query("
+      - ".queryRaw("
+      - "sequelize.query"
+    sql_keywords:
+      - "SELECT"
+      - "INSERT"
+      - "UPDATE"
+      - "DELETE"
+    risky_construction_patterns:
+      - "`.*\\$\\{.+\\}.*`"
+      - "\"\\s*\\+"
+      - "'\\s*\\+"
+      - "\\+\\s*[A-Za-z_][A-Za-z0-9_]*"
+  direct_literal_assignment:
+    allowed_assignment_patterns:
+      - "^const\\s+"
+      - "\\breadonly\\b.*=\\s*"
+    literal_patterns:
+      - "\"(?:[^\"\\\\]|\\\\.)*\""
+      - "'(?:[^'\\\\]|\\\\.)*'"
+      - "`(?:[^`\\\\]|\\\\.)*`"
+      - "\\b\\d+(?:\\.\\d+)?\\b"
+      - "\\btrue\\b"
+      - "\\bfalse\\b"
+      - "\\bnull\\b"
+      - "\\bundefined\\b"
+    declaration_patterns:
+      - "\\b(?:let|var|private|public|protected|readonly)\\s+[A-Za-z_][A-Za-z0-9_]*\\s*(?::[^=;]+)?=\\s*(?P<literal>VALUE)"
+  dangerous_api:
+    patterns:
+      - "\\beval\\s*\\("
+      - "\\bnew\\s+Function\\s*\\("
+      - "child_process\\.(?:exec|execSync|spawn|spawnSync)\\s*\\("
+
+reporting:
+  include_line_numbers: true
+  include_source_lines: true

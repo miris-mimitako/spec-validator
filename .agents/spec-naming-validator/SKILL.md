@@ -48,6 +48,12 @@ Validate spec structure and canonical ids:
 python .agents/spec-naming-validator/scripts/validate_spec_structure.py --spec-root samples --format text
 ```
 
+Validate static security rules for TypeScript / NestJS:
+
+```powershell
+python .agents/spec-naming-validator/scripts/validate_security.py --path examples/typescript-security-pass/src --format text
+```
+
 Use `// TRACE: ...` comments for implementation and test annotations so the validator can recognize them.
 
 Get machine-readable output:

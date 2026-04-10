@@ -8,6 +8,7 @@ Current scope:
 - Reuse spec structure, traceability, and reporting flows
 - Apply naming validation to C# identifiers and `.cs` files through `00_standard-language-csharp.yaml`
 - Validate layer crossing with DIP rules, consumer-owned interfaces, and external DI registration
+- Validate static security rules such as sensitive logging, SQL injection risk, dangerous APIs, and direct literal assignment
 
 Current limitation:
 

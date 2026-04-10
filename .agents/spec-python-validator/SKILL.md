@@ -37,6 +37,12 @@ Validate names:
 python .agents/spec-python-validator/scripts/validate_names.py OrderRepository PlaceOrderUseCase --format text
 ```
 
+Validate static security rules:
+
+```powershell
+python .agents/spec-python-validator/scripts/validate_security.py --path examples/python-security-pass/src --format text
+```
+
 Write a Markdown report:
 
 ```powershell

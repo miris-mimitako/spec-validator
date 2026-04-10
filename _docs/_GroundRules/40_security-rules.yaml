@@ -1,0 +1,100 @@
+version: 1
+id: security-rules
+status: draft
+
+purpose: >
+  静的解析で診断可能なセキュリティルールを定義する。
+  実行時の攻撃成功可否までは扱わず、危険な実装パターンの存在を検出する。
+
+policy:
+  target_language: csharp
+  scan_extensions:
+    - ".cs"
+  comment_prefixes:
+    - "//"
+
+rules:
+  - rule_id: SEC-001
+    issue_code: SENSITIVE_DATA_LOGGING
+    severity: error
+    description: >
+      password, token, secret, api key などの機密情報をログ出力してはならない。
+  - rule_id: SEC-002
+    issue_code: SQL_INJECTION_RISK
+    severity: error
+    description: >
+      SQL 文字列を連結や文字列補間で組み立てて SQL 実行 API に渡してはならない。
+      パラメータ化された query を使う。
+  - rule_id: SEC-003
+    issue_code: FORBIDDEN_DIRECT_LITERAL_ASSIGNMENT
+    severity: error
+    description: >
+      リテラル値を変数、フィールド、プロパティへ直接代入してはならない。
+      必ず const を宣言し、その定数経由で参照する。
+  - rule_id: SEC-004
+    issue_code: FORBIDDEN_DANGEROUS_API
+    severity: warning
+    description: >
+      eval 相当、危険な deserialize、shell 実行などの危険 API は原則禁止する。
+
+detection:
+  sensitive_logging:
+    logger_tokens:
+      - "LogInformation"
+      - "LogWarning"
+      - "LogError"
+      - "LogDebug"
+      - "Console.WriteLine"
+    sensitive_terms:
+      - "password"
+      - "passwd"
+      - "pwd"
+      - "token"
+      - "secret"
+      - "apikey"
+      - "api_key"
+      - "access_token"
+      - "refresh_token"
+      - "authorization"
+  sql_injection_risk:
+    execution_tokens:
+      - "FromSqlRaw"
+      - "ExecuteSqlRaw"
+      - "SqlCommand"
+      - "Query"
+      - "QueryAsync"
+      - "Execute"
+      - "ExecuteAsync"
+    sql_keywords:
+      - "SELECT"
+      - "INSERT"
+      - "UPDATE"
+      - "DELETE"
+    risky_construction_patterns:
+      - "\\$\\s*\\@?\""
+      - "\"\\s*\\+"
+      - "\\+\\s*[A-Za-z_][A-Za-z0-9_]*"
+  direct_literal_assignment:
+    allowed_assignment_patterns:
+      - "\\bconst\\b"
+    literal_patterns:
+      - "\"(?:[^\"\\\\]|\\\\.)*\""
+      - "'(?:[^'\\\\]|\\\\.)'"
+      - "\\b\\d+(?:\\.\\d+)?\\b"
+      - "\\btrue\\b"
+      - "\\bfalse\\b"
+      - "\\bnull\\b"
+    declaration_patterns:
+      - "\\b(?:var|string|int|long|decimal|double|float|bool|Guid|DateTime|TimeSpan|object|[A-Z][A-Za-z0-9_]*)\\s+[a-z_][A-Za-z0-9_]*\\s*=\\s*(?P<literal>VALUE)"
+      - "\\b(?:public|private|internal|protected)\\s+(?:static\\s+|readonly\\s+|readonly\\s+static\\s+|static\\s+readonly\\s+)?(?:string|int|long|decimal|double|float|bool|Guid|DateTime|TimeSpan|object|[A-Z][A-Za-z0-9_]*)\\s+[A-Za-z_][A-Za-z0-9_]*\\s*=\\s*(?P<literal>VALUE)"
+  dangerous_api:
+    patterns:
+      - "BinaryFormatter"
+      - "Process\\.Start\\s*\\("
+      - "Assembly\\.Load\\s*\\("
+      - "Type\\.GetType\\s*\\("
+      - "Activator\\.CreateInstance\\s*\\("
+
+reporting:
+  include_line_numbers: true
+  include_source_lines: true

@@ -1,0 +1,212 @@
+version: 1
+id: typescript-module-rules
+status: draft
+
+purpose: >
+  TypeScript / React / NestJS 系プロジェクトで利用可能な主要モジュールと、
+  強制する実装方針を定義する。
+  後続の静的解析で import と利用パターンを検査できるよう、
+  「強制」「許可」「禁止」を明示する。
+
+scope:
+  target_language: typescript
+  target_runtime:
+    - browser
+    - node
+  target_frontend:
+    - react
+  target_backend:
+    - nestjs
+
+core_principles:
+  - principle_id: TS-MODULE-001
+    name: minimal-standardized-stack
+    rule: >
+      同じ責務に複数のライブラリを混在させない。
+      状態管理、validation、form、routing などは project standard を固定する。
+  - principle_id: TS-MODULE-002
+    name: static-enforceable-decision
+    rule: >
+      採用ルールは import とコードパターンで機械判定できる粒度まで落とし込む。
+  - principle_id: TS-MODULE-003
+    name: keep-react-standard-first
+    rule: >
+      React 標準で十分な責務に外部状態管理ライブラリを持ち込まない。
+
+module_policies:
+  state_management:
+    decision_rule: >
+      複数画面または複数ドメインをまたぐ状態管理が必要なときは Redux を使用する。
+      component 単位または単一画面内で閉じる簡易状態は React 標準 state/context を使う。
+    required_modules:
+      - "@reduxjs/toolkit"
+      - "react-redux"
+    allowed_react_standard:
+      - "react"
+    forbidden_modules:
+      - "mobx"
+      - "zustand"
+      - "recoil"
+      - "xstate"
+    notes:
+      - "Redux を使う場合は plain redux ではなく Redux Toolkit を使う"
+      - "server state を Redux に過積載しない"
+
+  validation:
+    decision_rule: >
+      入力値検証、DTO 検証、API 境界検証、環境変数検証は Zod を正本とする。
+    required_modules:
+      - "zod"
+    forbidden_modules:
+      - "yup"
+      - "joi"
+      - "class-validator"
+      - "superstruct"
+      - "ajv"
+    notes:
+      - "型定義だけでなく runtime validation を必須にする"
+      - "schema は再利用可能な境界単位で定義する"
+
+  form:
+    decision_rule: >
+      フォーム状態管理は React Hook Form を標準とし、validation は Zod resolver 経由で連携する。
+    required_modules:
+      - "react-hook-form"
+      - "@hookform/resolvers"
+    required_with:
+      - "zod"
+    forbidden_modules:
+      - "formik"
+      - "final-form"
+    notes:
+      - "独自 form state 実装を乱立させない"
+
+  server_state:
+    decision_rule: >
+      API 取得結果、再取得、キャッシュ、mutation 状態は TanStack Query を標準とする。
+      これを Redux の代替に使うのではなく、server state 専用に使う。
+    required_modules:
+      - "@tanstack/react-query"
+    forbidden_modules:
+      - "swr"
+      - "apollo-client"
+    notes:
+      - "remote cache は UI state と分離する"
+
+  routing:
+    decision_rule: >
+      React アプリの画面遷移は React Router を標準とする。
+    required_modules:
+      - "react-router-dom"
+    forbidden_modules:
+      - "@reach/router"
+      - "wouter"
+
+  date_time:
+    decision_rule: >
+      日付計算・整形は date-fns を標準とする。
+      Moment.js 系ライブラリは新規採用しない。
+    required_modules:
+      - "date-fns"
+    forbidden_modules:
+      - "moment"
+      - "dayjs"
+      - "luxon"
+
+  backend_http:
+    decision_rule: >
+      NestJS の HTTP 境界では framework 標準を優先し、Controller, Pipe, Guard, Interceptor を使う。
+      validation の正本は Zod とし、DTO class + class-validator の強制は行わない。
+    required_modules:
+      - "@nestjs/common"
+      - "zod"
+    forbidden_modules:
+      - "class-validator"
+      - "class-transformer"
+
+  testing:
+    decision_rule: >
+      TypeScript / React の unit component test は Testing Library を標準とし、
+      モックは framework 標準または Jest/Vitest 標準に寄せる。
+    allowed_modules:
+      - "@testing-library/react"
+      - "@testing-library/jest-dom"
+      - "@testing-library/user-event"
+      - "jest"
+      - "vitest"
+    forbidden_modules:
+      - "enzyme"
+
+enforceable_rules:
+  - rule_id: TSMOD-001
+    name: redux-toolkit-required-for-cross-screen-or-cross-domain-state
+    severity: error
+    static_expectation: >
+      cross-screen または cross-domain state と識別される実装では
+      `@reduxjs/toolkit` と `react-redux` を利用する。
+  - rule_id: TSMOD-002
+    name: react-standard-required-for-local-component-state
+    severity: warning
+    static_expectation: >
+      単純な local state のためだけに Redux や他 state library を導入しない。
+  - rule_id: TSMOD-003
+    name: zod-required-for-validation
+    severity: error
+    static_expectation: >
+      validation schema を持つ箇所では `zod` を利用し、他 validation library を導入しない。
+  - rule_id: TSMOD-004
+    name: react-hook-form-plus-zod-required-for-forms
+    severity: warning
+    static_expectation: >
+      form 実装では `react-hook-form` と `@hookform/resolvers/zod` の組み合わせを標準とする。
+  - rule_id: TSMOD-005
+    name: tanstack-query-required-for-server-state
+    severity: warning
+    static_expectation: >
+      server state の取得と cache 管理は `@tanstack/react-query` を標準とする。
+  - rule_id: TSMOD-006
+    name: date-fns-required-for-date-utility
+    severity: warning
+    static_expectation: >
+      日付ユーティリティは `date-fns` を使い、moment/dayjs/luxon を新規採用しない。
+
+recommended_additional_enforcement:
+  - item_id: TS-REC-001
+    topic: environment-validation
+    recommendation: >
+      環境変数は `zod` で起動時に検証する。
+    reason: >
+      実行時の設定不備を早期に落とせる。
+  - item_id: TS-REC-002
+    topic: api-client-boundary
+    recommendation: >
+      fetch / axios 直呼び出しを散在させず、api client module 経由に統一する。
+    reason: >
+      認証ヘッダ、例外変換、監査ログ、retry policy を集中管理できる。
+  - item_id: TS-REC-003
+    topic: error-model
+    recommendation: >
+      エラー型を共通化し、throw する値を `Error` 系に限定する。
+    reason: >
+      文字列 throw や不定形エラーを防げる。
+  - item_id: TS-REC-004
+    topic: path-alias-governance
+    recommendation: >
+      import path alias を project standard に固定し、相対 import の深いネストを避ける。
+    reason: >
+      layer 境界と依存方向を追いやすくなる。
+  - item_id: TS-REC-005
+    topic: test-library-standardization
+    recommendation: >
+      component test は Testing Library に統一し、Enzyme は禁止する。
+    reason: >
+      実装詳細依存の brittle test を減らせる。
+
+review_checklist:
+  - "cross-screen または cross-domain state で Redux Toolkit を使っているか"
+  - "local component state に過剰な state library を使っていないか"
+  - "validation が Zod に統一されているか"
+  - "form が react-hook-form + zod resolver に寄っているか"
+  - "server state が TanStack Query に寄っているか"
+  - "date utility が date-fns に統一されているか"
+  - "forbidden module が import されていないか"
