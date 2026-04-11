@@ -20,7 +20,7 @@ TEST_RULES_FILE = GROUND_RULES_DIR / "10_test-rules.yaml"
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
-    with path.open("r", encoding="utf-8") as handle:
+    with path.open("r", encoding="utf-8-sig") as handle:
         data = yaml.safe_load(handle)
     if not isinstance(data, dict):
         raise ValueError(f"YAML root must be a mapping: {path}")
@@ -326,7 +326,7 @@ class TraceabilityValidator:
     def _scan_files(self, files: list[Path], scan_kind: str) -> list[Annotation]:
         annotations: list[Annotation] = []
         for path in files:
-            text = path.read_text(encoding="utf-8")
+            text = path.read_text(encoding="utf-8-sig")
             for line_number, line in enumerate(text.splitlines(), start=1):
                 annotations.extend(self._scan_line(path, line_number, line, scan_kind))
         return annotations
@@ -1587,7 +1587,7 @@ def _write_report(path: Path, report_format: str, report: dict[str, Any], langua
         content = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
     else:
         content = _format_markdown_report(report, language)
-    path.write_text(content, encoding="utf-8")
+    path.write_text(content, encoding="utf-8-sig")
 
 
 def build_parser() -> argparse.ArgumentParser:

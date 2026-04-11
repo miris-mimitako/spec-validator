@@ -1,4 +1,4 @@
-# Repository Layout
+﻿# Repository Layout
 
 Use these files as the source of truth for Python-oriented specification governance.
 

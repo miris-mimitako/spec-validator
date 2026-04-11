@@ -1,4 +1,4 @@
-# Architecture Validation Report
+﻿# Architecture Validation Report
 
 - Generated At: `2026-04-09T13:17:27.064932+00:00`
 - Status: `success`

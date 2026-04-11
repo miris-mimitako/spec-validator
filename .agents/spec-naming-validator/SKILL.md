@@ -1,4 +1,4 @@
----
+﻿---
 name: spec-naming-validator
 description: Validate NestJS and DDD naming rules for this repository by reading `_docs/_GroundRules/00_standard-language-ddd.yaml` and `_docs/_GroundRules/01_domain-terms.yaml`. Use when Codex needs to check candidate names, explain naming violations, or run the local Python naming validator from `.agents/spec-naming-validator/scripts/validate_names.py`.
 ---

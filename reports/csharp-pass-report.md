@@ -1,4 +1,4 @@
-# Naming Validation Report
+﻿# Naming Validation Report
 
 - Generated At: `2026-04-09T13:04:08.625335+00:00`
 - Status: `success`

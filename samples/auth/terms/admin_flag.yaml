@@ -1,4 +1,4 @@
-Term: "管理者フラグ (Admin Flag)"
+﻿Term: "管理者フラグ (Admin Flag)"
 Definition: "従業員が管理者権限を持つかどうかを示すフラグ。DB の canonical 値は '1' / '0' だが、互換入力として 'true' / 'false' を受ける箇所がある"
 
 DB:

@@ -1,4 +1,4 @@
-Term: "CSRF モジュール (CsrfModule)"
+﻿Term: "CSRF モジュール (CsrfModule)"
 Definition: "CSRF 検証機能（CsrfService + CsrfGuard）を集約する NestJS モジュール。CSRF 保護が必要な任意のモジュールで imports して利用する"
 
 DB:

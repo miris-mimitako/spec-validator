@@ -1,4 +1,4 @@
-Term: "ログイン (Login Action)"
+﻿Term: "ログイン (Login Action)"
 Definition: "認証処理（act2）を実行し、成功時にチーム自動割当（act1）を行いトップページへ遷移する"
 
 DB:

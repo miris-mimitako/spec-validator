@@ -18,7 +18,7 @@ SECURITY_RULES_FILE = GROUND_RULES_DIR / "40_security-rules.yaml"
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
-    with path.open("r", encoding="utf-8") as handle:
+    with path.open("r", encoding="utf-8-sig") as handle:
         data = yaml.safe_load(handle)
     if not isinstance(data, dict):
         raise ValueError(f"YAML root must be a mapping: {path}")
@@ -120,7 +120,7 @@ class SecurityValidator:
         return collected
 
     def _scan_file(self, path: Path) -> list[Issue]:
-        text = path.read_text(encoding="utf-8")
+        text = path.read_text(encoding="utf-8-sig")
         issues: list[Issue] = []
         lines = text.splitlines()
         for index, line in enumerate(lines, start=1):
@@ -271,7 +271,7 @@ def _format_markdown(report: dict[str, Any]) -> str:
 def _write_report(path: Path, report_format: str, report: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     content = json.dumps(report, ensure_ascii=False, indent=2) + "\n" if report_format == "json" else _format_markdown(report)
-    path.write_text(content, encoding="utf-8")
+    path.write_text(content, encoding="utf-8-sig")
 
 
 def build_parser() -> argparse.ArgumentParser:

@@ -1,4 +1,4 @@
----
+﻿---
 name: spec-python-validator
 description: Validate Python-oriented specification governance for this repository. Use when Codex needs to apply the repository's YAML-based rules to Python projects, including spec structure checks under `_docs/_Specs`, traceability validation between specifications, implementation, and tests, and naming validation for Python files or identifiers after Python-specific term rules are defined.
 ---

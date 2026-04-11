@@ -1,4 +1,4 @@
-# Security Validation Report
+﻿# Security Validation Report
 
 - Generated At: `2026-04-10T12:20:53.244063+00:00`
 - Status: `failure`

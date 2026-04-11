@@ -1,4 +1,4 @@
-Term: "JWT 認証確認 (JWT Validation)"
+﻿Term: "JWT 認証確認 (JWT Validation)"
 Definition: "GET /auth/jwt で JWT の有効性を検証し、認証済みかどうかを判定するための最小ペイロードを返す"
 
 DB:

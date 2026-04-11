@@ -18,7 +18,7 @@ ARCHITECTURE_RULES_FILE = GROUND_RULES_DIR / "30_architecture-layer-rules.yaml"
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
-    with path.open("r", encoding="utf-8") as handle:
+    with path.open("r", encoding="utf-8-sig") as handle:
         data = yaml.safe_load(handle)
     if not isinstance(data, dict):
         raise ValueError(f"YAML root must be a mapping: {path}")
@@ -269,7 +269,7 @@ class ArchitectureValidator:
         return "unknown"
 
     def _parse_csharp_file(self, path: Path) -> TypeDecl:
-        text = path.read_text(encoding="utf-8")
+        text = path.read_text(encoding="utf-8-sig")
         layer = self._detect_layer(path)
         class_match = re.search(
             r"\b(?:public|internal|private|protected)?\s*(?:sealed\s+|abstract\s+|partial\s+)*class\s+([A-Za-z_][A-Za-z0-9_]*)(?:\s*:\s*([^{]+))?",
@@ -351,7 +351,7 @@ class ArchitectureValidator:
     def _collect_di_registrations(self, files: list[Path]) -> set[tuple[str, str]]:
         registrations: set[tuple[str, str]] = set()
         for path in files:
-            text = path.read_text(encoding="utf-8")
+            text = path.read_text(encoding="utf-8-sig")
             if self._detect_layer(path) != "composition_root":
                 continue
             for pattern in self.di_patterns:
@@ -453,7 +453,7 @@ def _format_markdown(report: dict[str, Any]) -> str:
 def _write_report(path: Path, report_format: str, report: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     content = json.dumps(report, ensure_ascii=False, indent=2) + "\n" if report_format == "json" else _format_markdown(report)
-    path.write_text(content, encoding="utf-8")
+    path.write_text(content, encoding="utf-8-sig")
 
 
 def build_parser() -> argparse.ArgumentParser:

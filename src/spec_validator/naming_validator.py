@@ -20,7 +20,7 @@ DOMAIN_TERMS_FILE = GROUND_RULES_DIR / "01_domain-terms.yaml"
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
-    with path.open("r", encoding="utf-8") as handle:
+    with path.open("r", encoding="utf-8-sig") as handle:
         data = yaml.safe_load(handle)
     if not isinstance(data, dict):
         raise ValueError(f"YAML root must be a mapping: {path}")
@@ -53,7 +53,7 @@ def _normalize_file_stem(path: Path) -> str:
 
 
 def _extract_typescript_identifiers(path: Path) -> list[tuple[str, str]]:
-    text = path.read_text(encoding="utf-8")
+    text = path.read_text(encoding="utf-8-sig")
     matches: list[tuple[str, str]] = []
     patterns = [
         ("class", re.compile(r"\bexport\s+class\s+([A-Za-z_][A-Za-z0-9_]*)")),
@@ -69,7 +69,7 @@ def _extract_typescript_identifiers(path: Path) -> list[tuple[str, str]]:
 
 
 def _extract_python_identifiers(path: Path) -> list[tuple[str, str]]:
-    text = path.read_text(encoding="utf-8")
+    text = path.read_text(encoding="utf-8-sig")
     matches: list[tuple[str, str]] = []
     patterns = [
         ("class", re.compile(r"^\s*class\s+([A-Za-z_][A-Za-z0-9_]*)\b", re.MULTILINE)),
@@ -82,7 +82,7 @@ def _extract_python_identifiers(path: Path) -> list[tuple[str, str]]:
 
 
 def _extract_csharp_identifiers(path: Path) -> list[tuple[str, str]]:
-    text = path.read_text(encoding="utf-8")
+    text = path.read_text(encoding="utf-8-sig")
     matches: list[tuple[str, str]] = []
     patterns = [
         (
@@ -301,7 +301,7 @@ def _write_report(report_path: Path, report_format: str, report: dict[str, Any])
         content = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
     else:
         content = _format_markdown_report(report)
-    report_path.write_text(content, encoding="utf-8")
+    report_path.write_text(content, encoding="utf-8-sig")
 
 
 @dataclass(frozen=True)

@@ -1,0 +1,11 @@
+root = true
+
+[*]
+end_of_line = lf
+insert_final_newline = true
+
+[*.{py,ts,js,json,toml}]
+charset = utf-8
+
+[*.{md,yaml,yml}]
+charset = utf-8-bom

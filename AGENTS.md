@@ -1,4 +1,4 @@
-# spec-validator
+﻿# spec-validator
 
 ## 目的
 

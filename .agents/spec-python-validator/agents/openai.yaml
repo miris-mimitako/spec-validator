@@ -1,4 +1,4 @@
-interface:
+﻿interface:
   display_name: "Spec Python Validator"
   short_description: "Validate Python spec governance and traceability"
   default_prompt: "Use $spec-python-validator to validate Python-oriented naming, spec structure, and traceability in this repository."

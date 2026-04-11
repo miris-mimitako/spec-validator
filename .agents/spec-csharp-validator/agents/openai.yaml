@@ -1,4 +1,4 @@
-interface:
+﻿interface:
   display_name: "Spec CSharp Validator"
   short_description: "Validate C# spec governance and traceability"
   default_prompt: "Use $spec-csharp-validator to validate C#-oriented naming, spec structure, and traceability in this repository."

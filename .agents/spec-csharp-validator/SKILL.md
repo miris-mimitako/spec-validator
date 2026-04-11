@@ -1,4 +1,4 @@
----
+﻿---
 name: spec-csharp-validator
 description: Validate C#-oriented specification governance for this repository. Use when Codex needs to apply the repository's YAML-based rules to C# projects, including spec structure checks under `_docs/_Specs`, traceability validation between specifications, implementation, and tests, and naming validation for C# files or identifiers after C#-specific standard language rules are defined.
 ---

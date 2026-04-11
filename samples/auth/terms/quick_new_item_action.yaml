@@ -1,4 +1,4 @@
-Term: "すぐに引継ぎを書く (Quick New Item)"
+﻿Term: "すぐに引継ぎを書く (Quick New Item)"
 Definition: "認証済みなら直接 new-item へ遷移、未認証ならログインフォームへ誘導し intent=new-item で遷移先を変更する"
 
 DB: null
